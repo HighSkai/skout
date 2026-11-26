@@ -12,7 +12,7 @@
 
 **Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Completion and docs come from the syntax of *your* server and addons, and before you upgrade Skript or an addon, Skout lists every line the new version breaks.
 
-Most Skript extensions stop at syntax highlighting. Skout reads your scripts the way Skript does: its indentation and comment rules are ported from Skript's own config parser, so an error in the editor is an error on your server.
+Most Skript extensions stop at syntax highlighting, or check a line's outer shape and treat everything inside it as text. Skout parses every line down to its sub-expressions with the types Skript gives them, so `set {_x} to 5 + "hello"` is an error in the editor, not a surprise on `/sk reload`. Its rules are ported from Skript's own source, and an error in the editor is an error on your server.
 
 <p align="center">
   <img src="images/diagnostics.png" alt="Skout reporting a missing colon, an unclosed string, an unescaped percent sign and other problems in a Skript file" width="100%">
@@ -88,12 +88,46 @@ Run **Skout: Check Upgrade…** and pick what you are upgrading to: a newer Skri
 
 Here is [a real report](docs/sample-upgrade-report.md) for a small script going from Skript 2.15.4 to 2.17.1.
 
+### A language engine (0.5)
+
+Skout 0.5 parses each line the way Skript's parser does: every `%slot%` of a pattern is parsed recursively as an expression, with its type, so problems inside a line are found, not only lines that match nothing.
+
+- **Type errors Skout is sure of:**
+  - arithmetic Skript has no operation for: `5 + "hello"`, `now + now`, `2 seconds + 5`, `"a" - {_x}`;
+  - a value of the wrong type in a slot: `wait "5 seconds"`, `length of 5`;
+  - a list where one value is needed: `{_list::*} + 1`;
+  - a function argument of the wrong type: `double("five")` for `double(n: number)`, with Skript's own message.
+- **Statements in the wrong place**, with Skript's messages:
+  - `else` or `else if` without an `if`, a misplaced `then`, and the rules of multiline `if any:` / `if all:`;
+  - `continue` outside a loop, `exit 2 loops` inside one, `loop-value` outside a `loop`;
+  - `return` outside a function, in a function without a return type, or after a delay;
+  - unreachable code after `stop`, `return` or `continue` (honouring `suppress unreachable code warnings`).
+- **Command entries.** An entry Skript does not expect is an error, with a quick fix for a misspelling: `atrigger:` becomes `trigger:`. Also entries given twice, a missing `trigger:` (required before 2.17), cooldown entries without a cooldown, and root-only entries in 2.17 subcommands. `permission message` is shown as deprecated in 2.17.
+- **Hover on any part of a line** shows what Skout parsed it as and its type: `length of name of player` · a number.
+- **Signature help** for function calls, yours and Skript's built-ins.
+- **Formatting.** Re-indents a file with your editor's indent setting and removes trailing whitespace. It only changes whitespace Skript does not read, and leaves a file with indentation errors alone.
+
+<p align="center">
+  <img src="images/engine.png" alt="Skout reporting a misspelled command entry, an addition of a number and a text, a text where a time span is needed, and an else without an if" width="100%">
+</p>
+
+Skout says nothing when it cannot be sure. A part of a line that no known syntax explains, such as an item type or syntax from an addon without a loaded dump, is accepted everywhere, and types are only compared where Skout knows every conversion Skript has (numbers, text, booleans, time spans, dates, vectors). [How Skout works](docs/architecture.md) explains the engine and lists what it does not check yet.
+
+### Your server (0.5)
+
+Open your server folder (or its `plugins/Skript/scripts`), or set `skout.server.folder`, and Skout reads, without starting anything:
+
+- **the Skript version** of the server's Skript jar, so the checks follow the version you run;
+- **your addons**, from the `plugin.yml` in each jar. The **Skout** view in the activity bar lists them, with whether their syntax is loaded: lines that use an addon without loaded syntax are not checked, and Skout says so instead of guessing;
+- **the syntax dumps your server generated** (`plugins/Skript/docs/docs.json` from `/sk gen-docs`, and SkriptHub Docs Tool output), loaded automatically;
+- **the errors Skript printed on `/sk reload`**, from `logs/latest.log`. They appear in the Problems panel as "Skript (server)", on the line that still holds the code Skript quoted. Skout's own checks stay the first line of defence; this is what your real server, with all its addons, said.
+
 ### Editor basics
 
 - **Outline.** Events, commands, functions and `options:` entries appear in the Outline view and the breadcrumbs.
 - **Folding.** Folding follows the real section structure and `###` block comments.
 - **Highlighting.** A small TextMate grammar covers strings with `%expressions%`, variables, `{@options}`, colour codes, comments and structure headers.
-- **Fast.** A keystroke in a 2,000-line file is re-parsed and re-indexed in about 9 ms; the cross-file checks over a 100,000-line project take about 45 ms and run in the background.
+- **Fast.** A keystroke in a 2,000-line file is re-parsed and re-indexed in under 10 ms and type-checked again in about 11 ms (only the edited line is re-analysed). The cross-file checks over a 100,000-line project take about 40 ms; scripts that are not open are type-checked in the background.
 - **Works in other editors.** The language server has no VS Code dependency; see [Other editors](#other-editors).
 
 ### Roadmap
@@ -104,6 +138,8 @@ Here is [a real report](docs/sample-upgrade-report.md) for a small script going 
 | **M2: Project awareness** | Workspace index; go to definition, references and hover; cross-file function, option and variable checks; Variables view; rename with preview | ✅ Released in 0.2 |
 | **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from syntax dumps of *your* server and addons; conservative "unrecognized syntax" hints with quick fixes | ✅ Released in 0.3 |
 | **M4: Upgrade checker** | "Skout: Check Upgrade…" compares two versions' syntax and reports every line in your project that the new Skript or addon version breaks, deprecates or changes | ✅ Released in 0.4 |
+| **0.5: Language engine** | Recursive, typed parsing of every line; type errors, misplaced statements, command entries; your server's version, addons, generated dumps and reload errors; signature help, formatting | ✅ 0.5 |
+| **Next** | Local variable type hints (`using local variable type hints`), event values per event, typed completion, semantic highlighting | Planned |
 
 <!-- GIF: go-to-definition.gif (M2). Record F12 on a function call jumping to another file, then Shift+F12. -->
 <!-- GIF: rename-namespace.gif (M2). Record F2 on {objective::…}, the Refactor Preview, and applying it. -->
@@ -115,7 +151,7 @@ Here is [a real report](docs/sample-upgrade-report.md) for a small script going 
 **From a release (VSIX).** Download `skout-<version>.vsix` from the [latest release](https://github.com/HighSkai/skout/releases/latest), then either run **Extensions: Install from VSIX…** from the Command Palette, or:
 
 ```sh
-code --install-extension skout-0.4.0.vsix
+code --install-extension skout-0.5.0.vsix
 ```
 
 **From the Marketplace.** Not published yet. The extension id will be `highskai.skout`.
@@ -132,6 +168,8 @@ Skout knows Skript's own syntax out of the box. To match your server exactly, gi
 - **Your addons, from your own server.** Put the [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool) in a copy of your server's `plugins/` folder (its README warns against running it in production) and run `/gendocs`. It writes one file per addon to `plugins/SkriptHubDocsTool/documentation/`. Add that folder to `skout.syntaxDumps`.
 - **Your exact Skript build.** Create the folder `plugins/Skript/docs/templates/` (Skript only registers `/sk gen-docs` when it exists), run `/sk gen-docs`, and add `plugins/Skript/docs/docs.json` to `skout.syntaxDumps`. It replaces the bundled Skript syntax. `/sk gen-docs` covers Skript only, not addons.
 
+When Skout knows your server folder (see [Your server](#your-server-05)), the dumps in `plugins/Skript/docs/` and `plugins/SkriptHubDocsTool/documentation/` are loaded without being listed.
+
 Addon functions loaded this way are known to the function checks too, so `skout.knownFunctions` is no longer needed for them. **Skout: Reload Syntax Dumps** picks up changed files.
 
 ## Settings
@@ -144,6 +182,8 @@ Every diagnostic category can be switched off.
 | `skout.addonVersions` | `{}` | The addon versions your server runs, e.g. `{ "SkBee": "3.11.0" }`, used to label upgrade reports |
 | `skout.knownFunctions` | `[]` | Functions provided by addons whose syntax is not loaded, so calls to them are not reported as undefined |
 | `skout.syntaxDumps` | `[]` | Syntax dump files or folders (Skript's `docs.json`, SkriptHub Docs Tool output, downloaded dumps), absolute or relative to the workspace |
+| `skout.server.folder` | `""` | Your server folder (with `plugins/Skript` in it). Empty: found from the workspace. Skout reads its Skript version, addons, generated dumps and log |
+| `skout.server.readLog` | `true` | Show the errors Skript printed in `logs/latest.log` as "Skript (server)" problems |
 | `skout.unrecognizedSyntax` | `"typos"` | `typos`: report a line only when one changed word makes it valid. `all`: also report every unmatched line, as information. `off` |
 | `skout.diagnostics.indentation` | `true` | Mixed tabs and spaces, wrong indentation depth, and (as information) a file mixing indent styles between structures |
 | `skout.diagnostics.missingColon` | `true` | A line followed by an indented block that does not end with `:` |
@@ -156,6 +196,9 @@ Every diagnostic category can be switched off.
 | `skout.diagnostics.functionSignature` | `true` | Function headers Skript cannot read |
 | `skout.diagnostics.unknownOption` | `true` | `{@options}` the script does not define |
 | `skout.diagnostics.unsetVariable` | `true` | Variables read but never set |
+| `skout.diagnostics.types` | `true` | Sub-expressions of a type Skript certainly rejects |
+| `skout.diagnostics.context` | `true` | Statements in the wrong place: `else` without `if`, `continue` outside a loop, `return` outside a function, unreachable code |
+| `skout.diagnostics.entries` | `true` | Unexpected, repeated or missing `command` entries |
 | `skout.trace.server` | `"off"` | Logs the messages between VS Code and the server to the **Skout** output channel |
 
 ## Diagnostics reference
@@ -179,6 +222,17 @@ Every diagnostic category can be switched off.
 | `unknown-option` | Error | `undefined option {@name}`, as Skript reports it |
 | `unset-variable` | Warning | The variable is read but never set where it could be |
 | `unrecognized-syntax` | Warning (Information in `all` mode) | The line matches no known syntax; with a quick fix when one word is misspelled |
+| `invalid-operation` | Error | Arithmetic Skript has no operation for: `5 + "hello"` |
+| `type-mismatch` | Error | A value of a type the slot cannot take: `wait "5 seconds"` |
+| `single-value` | Error | A list variable where one value is needed |
+| `argument-type` | Error | A function argument of the wrong type, with Skript's message |
+| `misplaced-conditional` | Error | `else`, `else if` or `then` in the wrong place, or a multiline `if` that breaks its rules |
+| `misplaced-statement` | Error | `continue`, `exit`, `return` or `loop-value` where Skript does not allow it |
+| `unreachable-code` | Warning | A statement after one that stops execution |
+| `unknown-entry` | Error | A `command` entry Skript does not expect, with a quick fix for a misspelling |
+| `missing-entry` / `command-entries` | Error / Warning | A required entry is missing, or entries that only make sense together |
+| `deprecated-entry` | Hint (struck through) | An entry Skript still accepts but ignores |
+| `skript-reported` | As Skript said | An error or warning Skript printed for this line on your server (source "Skript (server)") |
 | `upgrade-*` | Varies | Findings of **Skout: Check Upgrade…**, kept apart from the live diagnostics; **Skout: Clear Upgrade Results** removes them |
 
 ### How Skout knows what Skript accepts
@@ -192,9 +246,9 @@ Skout does not guess at Skript's rules; it ports them from Skript's source:
 - Variables are case-insensitive, as in Skript's default config. A dynamic part such as `%player%` may hold any value, so Skout only warns when no write could possibly match.
 - Argument counts are not checked for built-in functions, because Skript's documentation lists one signature per function and leaves out overloads (it documents `vector(n)` but not `vector(x, y, z)`).
 - The upgrade checker compares lines, not documentation ids: Skript renamed most ids between 2.13 and 2.16 (`EvtJoin` became `join`), so comparing ids would report hundreds of removals that are not. It must report nothing on Skript's own 2.17.1 tests when they are checked as an upgrade from 2.16.2.
-- Syntax patterns are matched with a port of Skript's own pattern compiler and matchers (`PatternCompiler`, `LiteralPatternElement`, `TypePatternElement`). Skout cannot parse the expression inside a `%slot%`, so any text fits a slot. That makes matching lenient by design: a line that matches nothing is genuinely unknown syntax.
+- Syntax patterns are matched with a port of Skript's own pattern compiler and matchers (`PatternCompiler`, `LiteralPatternElement`, `TypePatternElement`), and since 0.5 each `%slot%` is parsed recursively like `SkriptParser#parseSingleExpr`. Type rules come from `DefaultConverters` and `DefaultOperations`, type names from `default.lang`, and context rules from `SecConditional`, `EffContinue`, `EffExit`, `EffReturn`, `ExprLoopValue` and `ScriptLoader`.
 
-Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions, and no typo warnings at all.
+Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions, and no typo warnings at all. For misplaced statements the test is stricter: Skout must report exactly the four errors Skript's own tests expect, and nothing else.
 
 ## Other editors
 

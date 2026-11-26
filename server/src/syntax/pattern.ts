@@ -25,7 +25,15 @@ export type Element =
   | { readonly t: 'opt'; readonly body: Element[] }
   | { readonly t: 'group'; readonly body: Element[] }
   | { readonly t: 'choice'; readonly alts: Element[][] }
-  | { readonly t: 'type'; readonly types: string; readonly nullable: boolean }
+  | {
+      readonly t: 'type';
+      readonly types: string;
+      readonly nullable: boolean;
+      /** `%*type%`: only literals (TypePatternElement clears PARSE_EXPRESSIONS). */
+      readonly literalOnly?: boolean;
+      /** `%~type%`: no literals (TypePatternElement clears PARSE_LITERALS). */
+      readonly expressionOnly?: boolean;
+    }
   | { readonly t: 'regex'; readonly source: string }
   | { readonly t: 'tag' };
 
@@ -101,12 +109,16 @@ function unwrapGroup(body: Element[]): Element[] {
 function typeElement(text: string): Element {
   let i = 0;
   let nullable = false;
+  let literalOnly = false;
+  let expressionOnly = false;
   while (i < text.length && '-*~'.includes(text[i])) {
     if (text[i] === '-') nullable = true;
+    else if (text[i] === '*') literalOnly = true;
+    else expressionOnly = true;
     i++;
   }
   const at = text.indexOf('@', i);
-  return { t: 'type', types: at === -1 ? text.slice(i) : text.slice(i, at), nullable };
+  return { t: 'type', types: at === -1 ? text.slice(i) : text.slice(i, at), nullable, literalOnly, expressionOnly };
 }
 
 /** SkriptParser#nextBracket for groups: respects `\` escapes and nesting. */
@@ -126,17 +138,22 @@ function nextBracket(pattern: string, closing: string, opening: string, start: n
 // --- linked form for matching -------------------------------------------------
 
 /** Each node knows what follows it, like Skript's linked PatternElements, so a match is a function of (node, offset). */
-type Node =
-  | { id: number; k: 'lit'; text: string; next: Node | null }
-  | { id: number; k: 'opt'; body: Node | null; next: Node | null }
-  | { id: number; k: 'choice'; alts: (Node | null)[] }
-  | { id: number; k: 'type'; next: Node | null }
-  | { id: number; k: 'regex'; re: RegExp; next: Node | null };
+export type PatternNode =
+  | { id: number; k: 'lit'; text: string; next: PatternNode | null }
+  | { id: number; k: 'opt'; body: PatternNode | null; next: PatternNode | null }
+  | { id: number; k: 'choice'; alts: (PatternNode | null)[] }
+  | { id: number; k: 'type'; slot: Extract<Element, { t: 'type' }>; index: number; next: PatternNode | null }
+  | { id: number; k: 'regex'; re: RegExp; source: string; next: PatternNode | null };
+type Node = PatternNode;
 
 export interface CompiledPattern {
   readonly source: string;
   readonly elements: Element[];
   readonly head: Node | null;
+  /** Number of linked nodes, for memo keys. */
+  readonly size: number;
+  /** Number of `%slots%`. */
+  readonly slots: number;
   /** Lower-case words that every match must contain, for a quick pre-check. */
   readonly required: readonly string[];
   /** Literal words anywhere in the pattern, for typo suggestions. */
@@ -162,6 +179,7 @@ function startsWithText(seq: Element[]): boolean {
 export function compilePattern(source: string): CompiledPattern {
   const elements = parsePattern(source);
   let id = 0;
+  let slots = 0;
   const link = (seq: Element[], next: Node | null): Node | null => {
     let node = next;
     for (let i = seq.length - 1; i >= 0; i--) node = build(seq[i], node);
@@ -178,9 +196,9 @@ export function compilePattern(source: string): CompiledPattern {
       case 'choice':
         return { id: id++, k: 'choice', alts: e.alts.map((alt) => link(alt, next)) };
       case 'type':
-        return { id: id++, k: 'type', next };
+        return { id: id++, k: 'type', slot: e, index: slots++, next };
       case 'regex':
-        return { id: id++, k: 'regex', re: javaRegex(e.source), next };
+        return { id: id++, k: 'regex', re: javaRegex(e.source), source: e.source, next };
       case 'tag':
         return next;
     }
@@ -204,7 +222,7 @@ export function compilePattern(source: string): CompiledPattern {
     }
   };
   collect(elements, false);
-  return { source, elements, head, required, words: [...words], anchors: [...anchors], anchored: startsWithText(elements) };
+  return { source, elements, head, size: id, slots, required, words: [...words], anchors: [...anchors], anchored: startsWithText(elements) };
 }
 
 function javaRegex(source: string): RegExp {
@@ -264,7 +282,7 @@ export function matches(pattern: CompiledPattern, text: string): boolean {
 }
 
 /** LiteralPatternElement#match, including its lenient handling of spaces. */
-function matchLiteral(literal: string, lower: string, pos: number): number {
+export function matchLiteral(literal: string, lower: string, pos: number): number {
   let i = pos;
   for (const c of literal) {
     if (c === ' ') {

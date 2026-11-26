@@ -2,7 +2,7 @@
   "name": "skout",
   "displayName": "Skout",
   "description": "Skript language server: errors as you type, completion and docs from your own server's syntax, project navigation, and an upgrade checker that lists what a new Skript or addon version breaks.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "highskai",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
@@ -98,6 +98,16 @@
           "default": [],
           "markdownDescription": "Syntax dumps to load on top of the bundled Skript syntax: files, or folders (every `.json` inside), absolute or relative to the workspace. Accepts Skript's `docs.json` from `/sk gen-docs` (it replaces the bundled Skript syntax), [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool) files from `plugins/SkriptHubDocsTool/documentation/`, and files saved by **Skout: Download Syntax Dump**."
         },
+        "skout.server.folder": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "The Minecraft server folder (the one with `plugins/Skript` in it), absolute or relative to the workspace. Empty: Skout looks for it from the workspace. From it, Skout reads the Skript version of the Skript jar (unless `#skout.skriptVersion#` is set), the installed addons, the syntax dumps the server generated (`plugins/Skript/docs/docs.json`, `plugins/SkriptHubDocsTool/documentation/`) and `logs/latest.log`. Skout only reads these files."
+        },
+        "skout.server.readLog": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Show the errors Skript printed in the server's `logs/latest.log` after `/sk reload` in the Problems panel, as \"Skript (server)\". Each is placed on the line that still holds the code Skript quoted, and dropped when that line is gone."
+        },
         "skout.unrecognizedSyntax": {
           "type": "string",
           "enum": [
@@ -168,6 +178,21 @@
           "default": true,
           "markdownDescription": "Report variables that are read but never set anywhere they could be: in the workspace for globals, in the same trigger or function for locals."
         },
+        "skout.diagnostics.entries": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report entries Skript does not expect in a `command` (such as a misspelled `atrigger:`, with a quick fix), entries given twice, and a missing `trigger:` (required before Skript 2.17)."
+        },
+        "skout.diagnostics.context": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report statements in the wrong place, as Skript does: `else` without `if`, `continue` outside a loop, `loop-value` outside a `loop`, `return` outside a function, and unreachable code after `stop` or `return`."
+        },
+        "skout.diagnostics.types": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report sub-expressions of the wrong type that Skout is sure Skript rejects: `5 + \"hello\"`, `wait \"5 seconds\"`, a list variable where a single value is needed, a function argument of the wrong type."
+        },
         "skout.trace.server": {
           "type": "string",
           "enum": [
@@ -187,6 +212,13 @@
           "name": "Skout: Variables",
           "contextualTitle": "Skout",
           "icon": "images/file-icon.svg"
+        }
+      ],
+      "skout": [
+        {
+          "id": "skout.environment",
+          "name": "Environment",
+          "contextualTitle": "Skout"
         }
       ]
     },
@@ -224,6 +256,12 @@
         "command": "skout.clearUpgradeResults",
         "title": "Clear Upgrade Results",
         "category": "Skout"
+      },
+      {
+        "command": "skout.environment.refresh",
+        "title": "Refresh Environment",
+        "category": "Skout",
+        "icon": "$(refresh)"
       }
     ],
     "menus": {
@@ -232,6 +270,20 @@
           "command": "skout.variables.refresh",
           "when": "view == skout.variables",
           "group": "navigation"
+        },
+        {
+          "command": "skout.environment.refresh",
+          "when": "view == skout.environment",
+          "group": "navigation"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "skout",
+          "title": "Skout",
+          "icon": "images/activity.svg"
         }
       ]
     }
@@ -248,7 +300,7 @@
     "package": "node scripts/build.mjs --production && vsce package --no-dependencies",
     "vscode:prepublish": "node scripts/build.mjs --production",
     "images": "node scripts/render-images.mjs",
-    "dumps": "node scripts/build-dumps.mjs",
+    "dumps": "node scripts/build-dumps.mjs && node scripts/build-typenames.mjs",
     "sample-report": "node scripts/sample-report.mjs"
   },
   "devDependencies": {

@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
+import { functionLookup, semanticIssues } from '../src/engine/analyze';
+import { Engine } from '../src/engine/engine';
 import { toDiagnostics } from '../src/features/diagnostics';
 import { projectIssues } from '../src/features/project';
 import { unrecognizedIssues } from '../src/features/syntax';
@@ -65,6 +67,28 @@ describe('performance', () => {
     }
     const p95 = percentile(times, 0.95);
     console.log(`syntax matching, 2,000 lines: first pass ${coldMs.toFixed(0)} ms, then per keystroke p95 ${p95.toFixed(1)} ms`);
+    expect(p95).toBeLessThan(100);
+  });
+
+  it('type-checks a 2,000-line file, then only the edited line per keystroke', () => {
+    const registry = new SyntaxRegistry(syntax);
+    const engine = new Engine(registry);
+    const index = new WorkspaceIndex(registry.version);
+    const text = bigScript(2000);
+    const cold = performance.now();
+    const file = index.update('file:///big.sk', text);
+    semanticIssues(file, registry, engine, functionLookup(index, file.uri, registry));
+    const coldMs = performance.now() - cold;
+    const times: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const start = performance.now();
+      const edited = index.update('file:///big.sk', `${text}\non join:\n\tset {_x} to ${i} + length of "edit ${i}"`);
+      semanticIssues(edited, registry, engine, functionLookup(index, edited.uri, registry));
+      times.push(performance.now() - start);
+    }
+    const p95 = percentile(times, 0.95);
+    console.log(`type checking, 2,000 lines: first pass ${coldMs.toFixed(0)} ms, then per keystroke p95 ${p95.toFixed(1)} ms`);
+    expect(coldMs).toBeLessThan(2000);
     expect(p95).toBeLessThan(100);
   });
 

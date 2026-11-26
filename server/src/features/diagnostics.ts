@@ -1,4 +1,4 @@
-import { DiagnosticSeverity, type Diagnostic } from 'vscode-languageserver';
+import { DiagnosticSeverity, DiagnosticTag, type Diagnostic } from 'vscode-languageserver';
 import type { Issue, Severity } from '../parser/types';
 import type { SkoutSettings } from '../settings';
 
@@ -26,10 +26,11 @@ function toDiagnostic(issue: Issue): Diagnostic {
     },
     severity: SEVERITY[issue.severity],
     code: issue.code,
-    source: 'skout',
+    source: issue.source ?? 'skout',
     message: issue.message,
   };
   if (issue.fix) diagnostic.data = { fix: issue.fix };
+  if (issue.tags?.length) diagnostic.tags = issue.tags.map((t) => (t === 'deprecated' ? DiagnosticTag.Deprecated : DiagnosticTag.Unnecessary));
   if (issue.related?.length) {
     diagnostic.relatedInformation = issue.related.map((r) => ({
       location: { uri: r.uri, range: { start: { line: r.line, character: r.start }, end: { line: r.line, character: r.end } } },

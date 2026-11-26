@@ -4,6 +4,29 @@ All notable changes to Skout are listed here. The format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-26
+
+A language engine: every line is parsed down to its sub-expressions, with types.
+
+### Added
+
+- A recursive expression parser that follows `SkriptParser#parseSingleExpr`: parentheses, variables, function calls, text with `%expressions%`, every expression pattern with its slots parsed recursively, arithmetic, and number, boolean and time span literals.
+- A type system from Skript's `default.lang`, `DefaultConverters` and `DefaultOperations`, checked closed-world so that conversions an addon could add are never reported.
+- Type diagnostics: `invalid-operation` (`5 + "hello"`), `type-mismatch` (`wait "5 seconds"`), `single-value` (`{_list::*} + 1`), `argument-type` (with Skript's own message). Setting: `skout.diagnostics.types`.
+- Context diagnostics with Skript's messages: `else`/`else if`/`then` placement and multiline `if` rules, `continue` and `exit` levels, `loop-value` outside a loop, `return` placement, return type and delays, and unreachable code, honouring `suppress unreachable code warnings`. Setting: `skout.diagnostics.context`.
+- Command entry validation per version (`EntryValidator`): unexpected entries with a quick fix for misspellings (`atrigger:` → `trigger:`), repeated and missing entries, cooldown entries without a cooldown, root-only entries in 2.17 subcommands, and `permission message` marked deprecated in 2.17. Setting: `skout.diagnostics.entries`.
+- Hover for the sub-expression under the cursor, with its type.
+- Signature help for function calls.
+- Document formatting: re-indentation by depth with the editor's indent, and trailing whitespace removal. Files with indentation errors are left alone.
+- Your server: with `skout.server.folder` or a workspace that is the server folder (or inside `plugins/Skript/scripts`), Skout reads the Skript version of the Skript jar, the addons from each jar's `plugin.yml`, the syntax dumps the server generated, and the errors Skript printed in `logs/latest.log`, shown as "Skript (server)" problems. Setting: `skout.server.readLog`.
+- The **Skout** view in the activity bar: the Skript version and where it comes from, the server, each addon with whether its syntax is loaded, the syntax dumps in use, how many scripts are checked, and what the server's log reported.
+- [How Skout works](docs/architecture.md): the layers, the decisions behind the engine, and its limitations.
+
+### Changed
+
+- Lines are matched against an index of patterns by their leading words, which makes syntax matching several times faster.
+- Scripts that are not open are type-checked in the background, a slice at a time.
+
 ## [0.4.0] - 2026-11-26
 
 Milestone M4, the upgrade checker.
@@ -89,7 +112,8 @@ The first release: milestone M1, Foundation.
 - Folding by section and `###` block comment.
 - An editor-agnostic language server: `node dist/server.js --stdio`.
 
-[Unreleased]: https://github.com/HighSkai/skout/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/HighSkai/skout/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/HighSkai/skout/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/HighSkai/skout/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/HighSkai/skout/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HighSkai/skout/compare/v0.1.0...v0.2.0

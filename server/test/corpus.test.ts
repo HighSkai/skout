@@ -6,6 +6,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { functionLookup, semanticIssues } from '../src/engine/analyze';
+import { contextIssues } from '../src/engine/context';
+import { Engine } from '../src/engine/engine';
+import { entryIssues } from '../src/features/entries';
 import { projectIssues } from '../src/features/project';
 import { unrecognizedIssues } from '../src/features/syntax';
 import { extract } from '../src/index/extract';
@@ -93,7 +97,76 @@ describe.skipIf(!existsSync(ROOT))('Skript’s own scripts against Skript’s sy
     }
     expect(reports).toEqual([]);
   }, 120_000);
+
+  /**
+   * The engine parses every line down to its sub-expressions. Skript's tests
+   * load in Skript, so any type error reported here is a false positive.
+   * Lines inside `parse:` blocks are expected to fail and are not counted.
+   */
+  it('produce no type errors', () => {
+    const registry = new SyntaxRegistry(catalog.forVersion('2.17.1'));
+    const engine = new Engine(registry);
+    const index = new WorkspaceIndex(registry.version);
+    for (const file of scripts(ROOT)) index.update(`file:///${relative(ROOT, file).replaceAll('\\', '/')}`, readFileSync(file, 'utf8'));
+    const reports: string[] = [];
+    let checked = 0;
+    for (const file of index.all()) {
+      checked += file.script.lines.length;
+      for (const issue of semanticIssues(file, registry, engine, functionLookup(index, file.uri, registry))) {
+        if (insideParseBlock(file.script.lines.map((l) => l.text), issue.line)) continue;
+        reports.push(`${file.uri.slice('file:///'.length)}:${issue.line + 1} ${issue.code} ${issue.message}`);
+      }
+    }
+    expect(checked).toBeGreaterThan(20_000);
+    expect(reports).toEqual([]);
+  }, 120_000);
+
+  /**
+   * Statements in the wrong place. Everything reported must be a failure
+   * Skript's own tests expect (they assert the same message in `parse:` blocks).
+   */
+  it('report exactly the misplaced statements Skript’s tests expect', () => {
+    const registry = new SyntaxRegistry(catalog.forVersion('2.17.1'));
+    const index = new WorkspaceIndex(registry.version);
+    for (const file of scripts(ROOT)) index.update(`file:///${relative(ROOT, file).replaceAll('\\', '/')}`, readFileSync(file, 'utf8'));
+    const reports: string[] = [];
+    for (const file of index.all()) {
+      for (const issue of contextIssues(file, registry, registry.version)) reports.push(`${file.uri.slice('file:///'.length)}:${issue.line + 1} ${issue.message}`);
+    }
+    expect(reports.sort()).toEqual([
+      'src/test/skript/tests/common/EffSuppressWarnings.sk:17 Unreachable code. The previous statement stops further execution.',
+      'src/test/skript/tests/common/EffSuppressWarnings.sk:28 Unreachable code. The previous statement stops further execution.',
+      'src/test/skript/tests/common/EffSuppressWarnings.sk:5 Unreachable code. The previous statement stops further execution.',
+      "src/test/skript/tests/syntaxes/sections/SecConditional.sk:189 'then' has to placed just after a multiline 'if' or 'else if' section",
+    ]);
+  });
+
+  it('produce no command entry errors', () => {
+    const version = catalog.forVersion('2.17.1').version;
+    const reports: string[] = [];
+    for (const file of scripts(ROOT)) {
+      const script = parseScript(readFileSync(file, 'utf8'));
+      for (const issue of entryIssues(script, version)) reports.push(`${relative(ROOT, file)}:${issue.line + 1} ${issue.message}`);
+    }
+    expect(reports).toEqual([]);
+  });
 });
+
+/** Whether a line is in a `parse:` section (Skript's tests check that its contents fail to load). */
+function insideParseBlock(lines: readonly string[], line: number): boolean {
+  const indent = (text: string) => /^\s*/.exec(text)![0].length;
+  let depth = indent(lines[line]);
+  for (let l = line - 1; l >= 0; l--) {
+    const text = lines[l];
+    if (text.trim() === '' || text.trim().startsWith('#')) continue;
+    if (indent(text) < depth) {
+      if (/^\s*parse( if .+)?:\s*$/.test(text)) return true;
+      depth = indent(text);
+      if (depth === 0) return false;
+    }
+  }
+  return false;
+}
 
 /** Registered by Skript's TestFunctions only when its test runner is active. */
 const TEST_ONLY_FUNCTIONS = new Set(['case_equals', 'file_separator']);

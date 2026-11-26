@@ -11,7 +11,7 @@ describe('pattern compiler (port of PatternCompiler)', () => {
       { t: 'regex', source: '.+' },
     ]);
     expect(parsePattern('a|b c')).toEqual([{ t: 'choice', alts: [[{ t: 'lit', text: 'a' }], [{ t: 'lit', text: 'b c' }]] }]);
-    expect(parsePattern('%-~players@-1%')).toEqual([{ t: 'type', types: 'players', nullable: true }]);
+    expect(parsePattern('%-~players@-1%')).toEqual([{ t: 'type', types: 'players', nullable: true, literalOnly: false, expressionOnly: true }]);
   });
 
   it('drops the tag name before a colon instead of matching it', () => {

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+  <title>Skout</title>
+  <!-- The blocky S from the Skout logo in one colour: VS Code tints activity bar icons itself. -->
+  <g fill="#c5c5c5">
+    <rect x="8" y="3" width="10" height="3"/>
+    <rect x="5" y="6" width="3" height="4.5"/>
+    <rect x="8" y="10.5" width="7.5" height="3"/>
+    <rect x="15.5" y="13.5" width="3" height="4.5"/>
+    <rect x="5" y="18" width="10.5" height="3"/>
+  </g>
+</svg>

@@ -4,6 +4,7 @@
 //   images/banner.png          README header
 //   images/social-preview.png  GitHub social preview (Settings > Social preview)
 //   images/diagnostics.png  Skout's real diagnostics on test-workspace/scripts/broken.sk
+//   images/engine.png       the engine's real type, context and entry errors on a short script
 //
 // diagnostics.png is drawn from the parser's actual output, not mocked up, so
 // re-run `npm run images` whenever messages change.
@@ -357,4 +358,99 @@ writeFileSync(join(images, 'social-preview.png'), png(card(1280, 640, 'github.co
   writeFileSync(join(images, 'syntax.png'), png(svg, W));
 }
 
-console.log('Rendered icon.png, banner.png, social-preview.png, diagnostics.png, project.png and syntax.png in images/');
+
+// --- engine.png: type, context and entry errors from the language engine ----------
+{
+  const outfile = join(root, 'node_modules', '.cache', 'skout-render', 'engine.cjs');
+  esbuild.buildSync({
+    stdin: {
+      contents: [
+        "export { WorkspaceIndex } from './server/src/index/workspace';",
+        "export { semanticIssues, functionLookup } from './server/src/engine/analyze';",
+        "export { contextIssues } from './server/src/engine/context';",
+        "export { Engine } from './server/src/engine/engine';",
+        "export { entryIssues } from './server/src/features/entries';",
+        "export { SyntaxCatalog } from './server/src/syntax/catalog';",
+        "export { SyntaxRegistry } from './server/src/syntax/registry';",
+      ].join('\n'),
+      resolveDir: root,
+      loader: 'ts',
+    },
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile,
+    logLevel: 'silent',
+  });
+  const { WorkspaceIndex, semanticIssues, functionLookup, contextIssues, Engine, entryIssues, SyntaxCatalog, SyntaxRegistry } = require(outfile);
+  const registry = new SyntaxRegistry(SyntaxCatalog.fromDirectory(join(root, 'dumps')).forVersion('2.17.1'));
+  const engine = new Engine(registry);
+  const index = new WorkspaceIndex(registry.version);
+  const source = [
+    'command /hello:',
+    '\tatrigger:',
+    '\t\tsend "Hello!"',
+    'on join:',
+    '\tset {_result} to 5 + "hello"',
+    '\twait "5 seconds"',
+    '\tsend "Welcome!" to player',
+    '\telse:',
+    '\t\tsend "?"',
+  ];
+  const file = index.update('file:///hello.sk', source.join('\n'));
+  const issues = [
+    ...entryIssues(file.script, registry.version),
+    ...semanticIssues(file, registry, engine, functionLookup(index, file.uri, registry)),
+    ...contextIssues(file, registry, registry.version),
+  ].sort((a, b) => a.line - b.line);
+
+  const W = 1280;
+  const rowH = 30;
+  const top = 64;
+  const H = top + source.length * rowH + 70;
+  const charW = 8.8;
+  const codeX = 70;
+  const msgX = 520;
+  let body = '';
+  source.forEach((line, i) => {
+    const y = top + i * rowH;
+    body += `<text x="${codeX - 22}" y="${y + 19}" font-family="Consolas" font-size="15" fill="#5a6b62" text-anchor="end">${i + 1}</text>`;
+    const shown = line.replace(/\t/g, '    ');
+    const m = /^(\s*)(command|on|set|wait|send|else|atrigger)?(.*)$/.exec(shown);
+    const keyword = m[2] ?? '';
+    const color = keyword === 'command' || keyword === 'on' || keyword === 'else' ? '#c586c0' : keyword ? '#dcdcaa' : '#d4d4d4';
+    const rest = esc(m[3]).replace(/(&quot;[^&]*&quot;)/g, '<tspan fill="#ce9178">$1</tspan>').replace(/(\{_[a-z]+\})/g, '<tspan fill="#9cdcfe">$1</tspan>');
+    body += `<text x="${codeX}" y="${y + 19}" font-family="Consolas" font-size="16" fill="#d4d4d4" xml:space="preserve"><tspan>${esc(m[1])}</tspan><tspan fill="${color}">${esc(keyword)}</tspan>${rest}</text>`;
+  });
+  const seen = new Set();
+  for (const issue of issues) {
+    const text = source[issue.line];
+    const col = (c) => text.slice(0, c).replace(/\t/g, '    ').length;
+    const x1 = codeX + col(issue.start) * charW;
+    const x2 = Math.max(x1 + 12, codeX + col(issue.end) * charW);
+    const y = top + issue.line * rowH + 24;
+    const stroke = issue.severity === 'error' ? '#f14c4c' : '#cca700';
+    let d = `M${x1} ${y}`;
+    for (let x = x1; x < x2; x += 4) d += ` q1 ${(x - x1) % 8 === 0 ? -3 : 3} 2 0 t2 0`;
+    body += `<path d="${d}" fill="none" stroke="${stroke}" stroke-width="1.4"/>`;
+    if (seen.has(issue.line)) continue;
+    seen.add(issue.line);
+    const message = issue.message.length > 104 ? `${issue.message.slice(0, 103)}…` : issue.message;
+    body += `<rect x="${msgX}" y="${top + issue.line * rowH + 3}" width="${W - msgX - 24}" height="24" rx="4" fill="#3c1f1f"/>`;
+    body += `<text x="${msgX + 10}" y="${top + issue.line * rowH + 20}" font-family="Segoe UI" font-size="13" fill="#f3b5b5">${esc(message)}</text>`;
+  }
+  const fix = issues.find((i) => i.fix);
+  if (fix) body += `<text x="${msgX + 10}" y="${top + source.length * rowH + 22}" font-family="Segoe UI" font-size="12.5" fill="#8b949e">Quick fix on line ${fix.line + 1}: Change to '${esc(fix.fix.text)}'</text>`;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" rx="10" fill="#1f1f1f"/>
+  <rect x="0" y="0" width="${W}" height="36" fill="#181818"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f57"/><circle cx="42" cy="18" r="6" fill="#febc2e"/><circle cx="62" cy="18" r="6" fill="#28c840"/>
+  <text x="${W / 2}" y="23" font-family="Segoe UI" font-size="13" fill="#9d9d9d" text-anchor="middle">hello.sk — Skript 2.17.1</text>
+  ${body}
+  <text x="${W - 24}" y="${H - 16}" font-family="Segoe UI" font-size="12.5" fill="#5a6b62" text-anchor="end">Rendered from Skout's real output</text>
+</svg>`;
+  writeFileSync(join(images, 'engine.png'), png(svg, W));
+}
+
+console.log('Rendered icon.png, banner.png, social-preview.png, diagnostics.png, project.png, syntax.png and engine.png in images/');

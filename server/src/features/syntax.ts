@@ -27,6 +27,8 @@ export interface LineSyntax {
   /** Column where `text` starts in the line, when it maps one to one. */
   readonly column: number;
   readonly kinds: readonly SyntaxKind[];
+  /** Patterns of those kinds that do not apply here. */
+  readonly exclude?: (ref: PatternRef) => boolean;
   readonly hit?: PatternRef;
 }
 
@@ -58,6 +60,7 @@ export function classify(file: FileIndex, node: SkNode, registry: SyntaxRegistry
     text,
     column: offset === -1 ? -1 : offset + at,
     kinds,
+    exclude,
     hit: kinds.length > 0 ? registry.match(kinds, text, exclude) : undefined,
   });
 
@@ -249,7 +252,7 @@ export function closestPatterns(syntax: LineSyntax, registry: SyntaxRegistry): P
  * (optimal string alignment), since `sned` for `send` is the commonest typo.
  * Gives up early above `limit`.
  */
-function distance(a: string, b: string, limit: number): number {
+export function distance(a: string, b: string, limit: number): number {
   let before = Array.from({ length: b.length + 1 }, () => 0);
   let previous = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 1; i <= a.length; i++) {

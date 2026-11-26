@@ -36,7 +36,11 @@ export type IssueCategory =
   | 'functionSignature'
   | 'unknownOption'
   | 'unsetVariable'
-  | 'unrecognizedSyntax';
+  | 'unrecognizedSyntax'
+  | 'types'
+  | 'entries'
+  | 'context'
+  | 'server';
 
 export type IssueCode =
   | 'indent-mixed'
@@ -56,7 +60,19 @@ export type IssueCode =
   | 'invalid-function'
   | 'unknown-option'
   | 'unset-variable'
-  | 'unrecognized-syntax';
+  | 'unrecognized-syntax'
+  | 'type-mismatch'
+  | 'invalid-operation'
+  | 'single-value'
+  | 'argument-type'
+  | 'unknown-entry'
+  | 'missing-entry'
+  | 'deprecated-entry'
+  | 'command-entries'
+  | 'misplaced-conditional'
+  | 'misplaced-statement'
+  | 'unreachable-code'
+  | 'skript-reported';
 
 export type Severity = 'error' | 'warning' | 'information' | 'hint';
 
@@ -77,6 +93,10 @@ export interface Issue {
   readonly start: number;
   readonly end: number;
   readonly related?: readonly RelatedLocation[];
+  /** Who reports it, when not Skout itself (`Skript (server)` for errors read from the server's log). */
+  readonly source?: string;
+  /** Shown struck through (deprecated) or faded (unnecessary). */
+  readonly tags?: readonly ('deprecated' | 'unnecessary')[];
   /** A replacement that fixes the problem, offered as a quick fix. */
   readonly fix?: { readonly line: number; readonly start: number; readonly end: number; readonly text: string };
 }

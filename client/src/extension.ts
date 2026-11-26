@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import { downloadSyntaxDump } from './downloadDump';
+import { registerEnvironmentView } from './environmentView';
 import { checkUpgrade } from './upgrade';
 import { registerVariablesView } from './variablesView';
 
@@ -46,6 +47,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<SkoutA
   await client.start();
 
   registerVariablesView(context, client);
+  registerEnvironmentView(context, client);
   registerStatus(context, client);
   const languageClient = client;
   // Upgrade findings live in their own collection, so they can be cleared without touching live diagnostics.

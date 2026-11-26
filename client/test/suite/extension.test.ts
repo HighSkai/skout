@@ -16,7 +16,8 @@ async function diagnosticsFor(uri: vscode.Uri, check: (codes: string[]) => boole
   for (let i = 0; i < 100; i++) {
     last = vscode.languages
       .getDiagnostics(uri)
-      .filter((d) => d.source === 'skout')
+      // Hints (deprecated syntax) are advice, not problems; tests that want them look for them.
+      .filter((d) => d.source === 'skout' && d.severity !== vscode.DiagnosticSeverity.Hint)
       .map((d) => `${String(typeof d.code === 'object' ? d.code.value : d.code)}@${d.range.start.line + 1}`)
       .sort();
     if (check(last)) return last;
@@ -80,6 +81,26 @@ describe('Skout extension', () => {
       await new Promise((resolve) => setTimeout(resolve, 500));
       assert.deepEqual(await diagnosticsFor(uri, () => true), [], name);
     }
+  });
+
+  it('marks deprecated entries with a struck-through hint', async () => {
+    const uri = fileUri('shop.sk');
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    let hint: vscode.Diagnostic | undefined;
+    for (let i = 0; i < 50 && !hint; i++) {
+      hint = vscode.languages.getDiagnostics(uri).find((d) => d.code === 'deprecated-entry');
+      if (!hint) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.ok(hint, 'permission message is deprecated in 2.17');
+    assert.equal(hint.severity, vscode.DiagnosticSeverity.Hint);
+    assert.deepEqual(hint.tags, [vscode.DiagnosticTag.Deprecated]);
+  });
+
+  it('serves the Environment view', async () => {
+    const env = await api.client.sendRequest<{ skript: { target: string; from: string }; server?: unknown; addons: unknown[] }>('skout/environment');
+    assert.equal(env.skript.from, 'bundled');
+    assert.equal(env.server, undefined, 'the test workspace is not a server folder');
+    await vscode.commands.executeCommand('skout.environment.focus');
   });
 
   it('updates diagnostics as the document is edited', async () => {
