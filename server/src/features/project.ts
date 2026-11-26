@@ -9,13 +9,14 @@ import type { Issue, IssueCategory, IssueCode, RelatedLocation, Severity } from 
 import { formatSignature, isListFunction, maxArguments, minArguments, sameRegistryKey, type Signature } from '../skript/functions';
 import { atLeast, compareVersions, type Version } from '../skript/version';
 import type { SkoutSettings } from '../settings';
-import type { SkriptSyntax, SyntaxCatalog } from '../syntax/catalog';
+import type { SyntaxCatalog } from '../syntax/catalog';
+import type { BuiltinSyntax } from '../syntax/registry';
 
 export interface ProjectContext {
   readonly index: WorkspaceIndex;
   readonly catalog: SyntaxCatalog;
   /** Built-in syntax from the bundled dump closest to the target version. */
-  readonly syntax: SkriptSyntax;
+  readonly syntax: BuiltinSyntax;
   /** The Skript version scripts target (skout.skriptVersion); version-dependent rules follow it. */
   readonly version: Version;
   readonly settings: SkoutSettings;

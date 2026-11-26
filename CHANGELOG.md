@@ -4,6 +4,22 @@ All notable changes to Skout are listed here. The format follows [Keep a Changel
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-26
+
+Milestone M3, Syntax intelligence.
+
+### Added
+
+- Completion for events, effects, conditions, sections, expressions, functions, variables, options and command entries, chosen by where the cursor is. Patterns become snippets with a tab stop per slot, and each alternative of a pattern's leading choice is offered (`login`, `join`, …).
+- Hover docs for the syntax a line matches (the most specific pattern wins), with description, example, addon and version.
+- `unrecognized-syntax`: misspelled words that make a line match nothing, with a quick fix. In `all` mode, every unmatched line with the closest patterns. Controlled by `skout.unrecognizedSyntax`.
+- A port of Skript's pattern compiler and matchers.
+- Importers for Skript's `docs.json`, SkriptHub Docs Tool files and SkriptHub's catalog, with format detection and a repair for the invalid JSON in Skript's 2.6.4 to 2.10.2 archives.
+- `skout.syntaxDumps` for files or folders of dumps from your own server and addons; a Skript dump from `/sk gen-docs` replaces the bundled one.
+- **Skout: Download Syntax Dump**, for Skript's docs or SkriptHub addon syntax, saved to `.skout/syntax/`.
+- **Skout: Reload Syntax Dumps**.
+- Addon functions from loaded dumps count as known to the function checks.
+
 ## [0.2.0] - 2026-11-26
 
 Milestone M2, Project awareness.
@@ -49,6 +65,7 @@ The first release: milestone M1, Foundation.
 - Folding by section and `###` block comment.
 - An editor-agnostic language server: `node dist/server.js --stdio`.
 
-[Unreleased]: https://github.com/HighSkai/skout/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/HighSkai/skout/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/HighSkai/skout/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/HighSkai/skout/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/HighSkai/skout/releases/tag/v0.1.0

@@ -9,3 +9,6 @@ dist/
 
 # Written by the integration test when it toggles a setting.
 test-workspace/.vscode/
+
+# Syntax dumps downloaded by 'Skout: Download Syntax Dump' when this repo is the workspace.
+.skout/

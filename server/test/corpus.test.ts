@@ -7,6 +7,9 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { projectIssues } from '../src/features/project';
+import { unrecognizedIssues } from '../src/features/syntax';
+import { extract } from '../src/index/extract';
+import { SyntaxRegistry } from '../src/syntax/registry';
 import { WorkspaceIndex } from '../src/index/workspace';
 import { parseScript } from '../src/parser/parser';
 import { defaultSettings } from '../src/settings';
@@ -76,6 +79,20 @@ describe.skipIf(!existsSync(ROOT))('Skript’s own scripts', () => {
     }
     expect(problems).toEqual([]);
   });
+});
+
+describe.skipIf(!existsSync(ROOT))('Skript’s own scripts against Skript’s syntax', () => {
+  it('produce no typo reports: every line Skript accepts is left alone', () => {
+    const registry = new SyntaxRegistry(catalog.forVersion('2.17.1'));
+    const reports: string[] = [];
+    for (const file of scripts(ROOT)) {
+      const indexed = extract(`file:///${relative(ROOT, file)}`, parseScript(readFileSync(file, 'utf8')), registry.version);
+      for (const issue of unrecognizedIssues(indexed, registry, 'typos')) {
+        reports.push(`${relative(ROOT, file).replaceAll('\\', '/')}:${issue.line + 1} ${issue.message}`);
+      }
+    }
+    expect(reports).toEqual([]);
+  }, 120_000);
 });
 
 /** Registered by Skript's TestFunctions only when its test runner is active. */

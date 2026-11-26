@@ -1,6 +1,7 @@
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import { downloadSyntaxDump } from './downloadDump';
 import { registerVariablesView } from './variablesView';
 
 let client: LanguageClient | undefined;
@@ -15,6 +16,8 @@ interface ServerStatus {
   targetVersion: string;
   builtinsVersion: string;
   bundledVersions: string[];
+  skriptSyntax: string;
+  addons: string[];
 }
 
 export async function activate(context: vscode.ExtensionContext): Promise<SkoutApi> {
@@ -43,6 +46,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<SkoutA
 
   registerVariablesView(context, client);
   registerStatus(context, client);
+  const languageClient = client;
+  context.subscriptions.push(
+    vscode.commands.registerCommand('skout.downloadSyntaxDump', () => downloadSyntaxDump(languageClient)),
+    vscode.commands.registerCommand('skout.reloadSyntaxDumps', async () => {
+      const result = await languageClient.sendRequest<{ addons: string[]; skript: string }>('skout/reloadDumps');
+      void vscode.window.showInformationMessage(
+        `Skout reloaded its syntax: Skript from ${result.skript}${result.addons.length > 0 ? `; addons: ${result.addons.join(', ')}` : '; no addon syntax loaded'}.`,
+      );
+    }),
+  );
   return { client };
 }
 
@@ -56,8 +69,8 @@ function registerStatus(context: vscode.ExtensionContext, languageClient: Langua
     const status = await languageClient.sendRequest<ServerStatus>('skout/status');
     item.text = `Skript ${status.targetVersion}`;
     item.detail =
-      `${status.files} script${status.files === 1 ? '' : 's'} indexed · built-in syntax from bundled ${status.builtinsVersion}` +
-      (status.targetVersion === status.builtinsVersion ? '' : ` (closest to ${status.targetVersion})`);
+      `${status.files} script${status.files === 1 ? '' : 's'} indexed · Skript syntax from ${status.skriptSyntax}` +
+      (status.addons.length > 0 ? ` · addons: ${status.addons.join(', ')}` : '');
   };
   context.subscriptions.push(item, languageClient.onNotification('skout/indexChanged', () => void update()));
   void update();

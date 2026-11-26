@@ -1,0 +1,17 @@
+{
+  "version": { "major": 2, "minor": 0 },
+  "source": { "name": "Skript", "version": "2.10.2" },
+  "effects": [],
+  "types": [
+    {
+      "id": "region",
+      "name": "Region",
+      "patterns" : [
+        ""region name"",
+
+        "pattern_end"
+      ],
+      "since": "2.1"
+    }
+  ]
+}

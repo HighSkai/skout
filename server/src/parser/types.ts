@@ -35,7 +35,8 @@ export type IssueCategory =
   | 'duplicateFunction'
   | 'functionSignature'
   | 'unknownOption'
-  | 'unsetVariable';
+  | 'unsetVariable'
+  | 'unrecognizedSyntax';
 
 export type IssueCode =
   | 'indent-mixed'
@@ -54,7 +55,8 @@ export type IssueCode =
   | 'duplicate-function'
   | 'invalid-function'
   | 'unknown-option'
-  | 'unset-variable';
+  | 'unset-variable'
+  | 'unrecognized-syntax';
 
 export type Severity = 'error' | 'warning' | 'information' | 'hint';
 
@@ -75,6 +77,8 @@ export interface Issue {
   readonly start: number;
   readonly end: number;
   readonly related?: readonly RelatedLocation[];
+  /** A replacement that fixes the problem, offered as a quick fix. */
+  readonly fix?: { readonly line: number; readonly start: number; readonly end: number; readonly text: string };
 }
 
 export interface OptionEntry {

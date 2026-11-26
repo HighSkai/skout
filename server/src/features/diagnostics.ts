@@ -29,6 +29,7 @@ function toDiagnostic(issue: Issue): Diagnostic {
     source: 'skout',
     message: issue.message,
   };
+  if (issue.fix) diagnostic.data = { fix: issue.fix };
   if (issue.related?.length) {
     diagnostic.relatedInformation = issue.related.map((r) => ({
       location: { uri: r.uri, range: { start: { line: r.line, character: r.start }, end: { line: r.line, character: r.end } } },

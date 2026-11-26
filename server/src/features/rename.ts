@@ -16,7 +16,7 @@ import {
 import type { FileIndex, FunctionDef, Span } from '../index/types';
 import type { WorkspaceIndex } from '../index/workspace';
 import { FUNCTION_NAME } from '../skript/functions';
-import type { SkriptSyntax } from '../syntax/catalog';
+import type { BuiltinSyntax } from '../syntax/registry';
 import { resolveCall, targetAt, type Target } from './navigation';
 import { fileName } from './project';
 
@@ -29,7 +29,7 @@ export interface RenameOptions {
 
 const INVALID = 1; // a request error, shown to the user by the client
 
-export function prepareRename(index: WorkspaceIndex, file: FileIndex, line: number, character: number, syntax: SkriptSyntax): { range: Range; placeholder: string } {
+export function prepareRename(index: WorkspaceIndex, file: FileIndex, line: number, character: number, syntax: BuiltinSyntax): { range: Range; placeholder: string } {
   const target = targetAt(file, line, character);
   const plan = planFor(index, target, syntax);
   return { range: range(plan.span), placeholder: plan.placeholder };
@@ -41,7 +41,7 @@ export function rename(
   line: number,
   character: number,
   newName: string,
-  syntax: SkriptSyntax,
+  syntax: BuiltinSyntax,
   options: RenameOptions,
 ): WorkspaceEdit {
   const plan = planFor(index, targetAt(file, line, character), syntax);
@@ -81,13 +81,13 @@ interface Plan {
   edits(name: string): Edit[];
 }
 
-function planFor(index: WorkspaceIndex, target: Target | undefined, syntax: SkriptSyntax): Plan {
+function planFor(index: WorkspaceIndex, target: Target | undefined, syntax: BuiltinSyntax): Plan {
   if (target?.kind === 'definition' || target?.kind === 'call') return functionPlan(index, target, syntax);
   if (target?.kind === 'variable') return variablePlan(index, target);
   throw new ResponseError(INVALID, 'Skout can rename functions and variable names. Put the cursor on a function name or on part of a variable name.');
 }
 
-function functionPlan(index: WorkspaceIndex, target: Extract<Target, { kind: 'definition' | 'call' }>, syntax: SkriptSyntax): Plan {
+function functionPlan(index: WorkspaceIndex, target: Extract<Target, { kind: 'definition' | 'call' }>, syntax: BuiltinSyntax): Plan {
   const defs: FunctionDef[] = target.kind === 'definition' ? sameNameScope(index, target.def) : resolveCall(index, target.call).flatMap((d) => sameNameScope(index, d));
   const unique = [...new Map(defs.map((d) => [`${d.uri}:${d.line}`, d])).values()];
   const span = target.kind === 'definition' ? target.def : target.call;

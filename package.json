@@ -1,8 +1,8 @@
 {
   "name": "skout",
   "displayName": "Skout",
-  "description": "Skript language server: errors as you type, go to definition, find references, rename and a variables view across your whole project, with addon-aware completion and an upgrade checker on the way.",
-  "version": "0.2.0",
+  "description": "Skript language server: errors as you type, completion and docs from your own server's syntax, go to definition, rename and a variables view across your whole project.",
+  "version": "0.3.0",
   "publisher": "highskai",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
@@ -81,6 +81,29 @@
           },
           "default": [],
           "markdownDescription": "Functions provided by addons (for example skript-particle), so calls to them are not reported as undefined. Addon syntax dumps will replace this in a later version."
+        },
+        "skout.syntaxDumps": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Syntax dumps to load on top of the bundled Skript syntax: files, or folders (every `.json` inside), absolute or relative to the workspace. Accepts Skript's `docs.json` from `/sk gen-docs` (it replaces the bundled Skript syntax), [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool) files from `plugins/SkriptHubDocsTool/documentation/`, and files saved by **Skout: Download Syntax Dump**."
+        },
+        "skout.unrecognizedSyntax": {
+          "type": "string",
+          "enum": [
+            "typos",
+            "all",
+            "off"
+          ],
+          "default": "typos",
+          "enumDescriptions": [
+            "Report a line only when changing one word makes it valid syntax, with a quick fix.",
+            "Also report every line that matches no known syntax, as information. Best once your addons' syntax dumps are loaded.",
+            "Never report unrecognized syntax."
+          ],
+          "markdownDescription": "How Skout reports lines that match no known event, effect, condition or section."
         },
         "skout.diagnostics.indentation": {
           "type": "boolean",
@@ -171,6 +194,17 @@
         "title": "Refresh Variables",
         "category": "Skout",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "skout.downloadSyntaxDump",
+        "title": "Download Syntax Dump",
+        "category": "Skout",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "skout.reloadSyntaxDumps",
+        "title": "Reload Syntax Dumps",
+        "category": "Skout"
       }
     ],
     "menus": {

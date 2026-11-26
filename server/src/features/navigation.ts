@@ -7,7 +7,8 @@ import type { FileIndex, FunctionCall, FunctionDef, OptionRef, Span, VariableOcc
 import { segmentEquals, writeCovers, type WorkspaceIndex } from '../index/workspace';
 import type { OptionEntry } from '../parser/types';
 import { formatSignature } from '../skript/functions';
-import type { BuiltinFunction, SkriptSyntax } from '../syntax/catalog';
+import type { BuiltinFunction } from '../syntax/catalog';
+import type { BuiltinSyntax } from '../syntax/registry';
 import { fileName } from './project';
 
 export type Target =
@@ -106,7 +107,7 @@ export function references(index: WorkspaceIndex, file: FileIndex, target: Targe
   }
 }
 
-export function hover(index: WorkspaceIndex, file: FileIndex, target: Target, syntax: SkriptSyntax): Hover | undefined {
+export function hover(index: WorkspaceIndex, file: FileIndex, target: Target, syntax: BuiltinSyntax): Hover | undefined {
   const value = hoverText(index, file, target, syntax);
   if (!value) return undefined;
   const span = target.kind === 'variable' ? target.occurrence : target.kind === 'definition' ? target.def : target.kind === 'call' ? target.call : target.kind === 'option' ? target.ref : target.span;
@@ -116,7 +117,7 @@ export function hover(index: WorkspaceIndex, file: FileIndex, target: Target, sy
   };
 }
 
-function hoverText(index: WorkspaceIndex, file: FileIndex, target: Target, syntax: SkriptSyntax): string | undefined {
+function hoverText(index: WorkspaceIndex, file: FileIndex, target: Target, syntax: BuiltinSyntax): string | undefined {
   switch (target.kind) {
     case 'definition':
       return functionHover([target.def], index, undefined, syntax);
@@ -141,7 +142,7 @@ function hoverText(index: WorkspaceIndex, file: FileIndex, target: Target, synta
   }
 }
 
-function functionHover(defs: FunctionDef[], index: WorkspaceIndex, builtin: BuiltinFunction | undefined, syntax: SkriptSyntax): string {
+function functionHover(defs: FunctionDef[], index: WorkspaceIndex, builtin: BuiltinFunction | undefined, syntax: BuiltinSyntax): string {
   const parts: string[] = [];
   for (const def of defs) {
     const signature = def.signature ? formatSignature(def.signature) : def.header;

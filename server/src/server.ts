@@ -17,25 +17,31 @@ import {
   ProposedFeatures,
   TextDocuments,
   TextDocumentSyncKind,
+  CodeActionKind,
+  type CodeAction,
   type Diagnostic,
   type InitializeParams,
   type InitializeResult,
   type WorkDoneProgressServerReporter,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { completions, resolveCompletion } from './features/completion';
 import { toDiagnostics } from './features/diagnostics';
 import { definition, hover, references, targetAt, workspaceSymbols } from './features/navigation';
 import { documentSymbols, foldingRanges } from './features/outline';
 import { projectIssues } from './features/project';
 import { prepareRename, rename } from './features/rename';
+import { syntaxHover, unrecognizedIssues } from './features/syntax';
 import { variablesTree } from './features/variablesTree';
 import { findScripts, isDisabledScript, normalizeUri, readScript, toPath, toUri } from './index/files';
 import type { FileIndex } from './index/types';
 import { WorkspaceIndex } from './index/workspace';
-import type { Issue } from './parser/types';
+import type { Issue, SkNode } from './parser/types';
 import { defaultSettings, resolveSettings, type SkoutSettings } from './settings';
 import { parseVersion, type Version } from './skript/version';
-import { SyntaxCatalog, type SkriptSyntax } from './syntax/catalog';
+import { SyntaxCatalog } from './syntax/catalog';
+import { loadDumps } from './syntax/load';
+import { SyntaxRegistry, type LoadedDump } from './syntax/registry';
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -44,7 +50,9 @@ const documents = new TextDocuments(TextDocument);
 const catalog = SyntaxCatalog.fromDirectory(join(__dirname, '..', 'dumps'));
 
 let settings: SkoutSettings = defaultSettings;
-let syntax: SkriptSyntax = catalog.forVersion(undefined);
+/** Everything Skout knows about syntax: bundled Skript for the target version plus the user's dumps. */
+let syntax = new SyntaxRegistry(catalog.forVersion(undefined));
+let userDumps: LoadedDump[] = [];
 let targetVersion: Version = syntax.version;
 const index = new WorkspaceIndex(targetVersion);
 
@@ -63,19 +71,40 @@ const published = new Map<string, string>();
 
 // --- configuration ------------------------------------------------------------
 
-function applySettings(next: SkoutSettings): void {
+async function applySettings(next: SkoutSettings): Promise<void> {
   const versionChanged = next.skriptVersion !== settings.skriptVersion;
+  const dumpsChanged = JSON.stringify(next.syntaxDumps) !== JSON.stringify(settings.syntaxDumps);
+  const modeChanged = next.unrecognizedSyntax !== settings.unrecognizedSyntax;
   settings = next;
-  if (versionChanged) {
-    syntax = catalog.forVersion(settings.skriptVersion || undefined);
-    targetVersion = parseVersion(settings.skriptVersion) ?? syntax.version;
-    index.setVersion(targetVersion);
-  }
+  if (dumpsChanged) await reloadDumps(false);
+  if (versionChanged || dumpsChanged || modeChanged) rebuildSyntax();
+  if (versionChanged) index.setVersion(targetVersion);
   scheduleProject(0);
 }
 
+/** Reads the dumps in skout.syntaxDumps, reporting the ones that fail. */
+async function reloadDumps(rebuild = true): Promise<void> {
+  const result = await loadDumps(settings.syntaxDumps, workspaceFolders);
+  userDumps = result.dumps;
+  for (const error of result.errors) connection.console.warn(`Skout: syntax dump ${error}`);
+  if (result.errors.length > 0) {
+    void connection.window.showWarningMessage(`Skout could not load ${result.errors.length} syntax dump(s): ${result.errors[0]}${result.errors.length > 1 ? ' (see the Skout output for the rest)' : ''}`);
+  }
+  if (rebuild) {
+    rebuildSyntax();
+    scheduleProject(0);
+  }
+}
+
+function rebuildSyntax(): void {
+  syntax = new SyntaxRegistry(catalog.forVersion(settings.skriptVersion || undefined), userDumps);
+  targetVersion = parseVersion(settings.skriptVersion) ?? syntax.version;
+  syntaxIssues = new WeakMap();
+  published.clear();
+}
+
 async function refreshSettings(): Promise<void> {
-  if (canPullConfiguration) applySettings(resolveSettings(await connection.workspace.getConfiguration('skout')));
+  if (canPullConfiguration) await applySettings(resolveSettings(await connection.workspace.getConfiguration('skout')));
 }
 
 // --- indexing -----------------------------------------------------------------
@@ -123,10 +152,22 @@ async function reloadFromDisk(uri: string): Promise<void> {
 
 // --- diagnostics --------------------------------------------------------------
 
+/** Unrecognized-syntax issues per indexed file; recomputed only when the file or the syntax changes. */
+let syntaxIssues = new WeakMap<FileIndex, Issue[]>();
+
+function unrecognized(file: FileIndex): Issue[] {
+  let issues = syntaxIssues.get(file);
+  if (!issues) {
+    issues = settings.unrecognizedSyntax === 'off' ? [] : unrecognizedIssues(file, syntax, settings.unrecognizedSyntax);
+    syntaxIssues.set(file, issues);
+  }
+  return issues;
+}
+
 function publish(uri: string, version?: number): void {
   const file = index.get(uri);
   if (!file) return;
-  const issues = [...file.script.issues, ...(indexed ? lastProject.get(uri) ?? [] : [])];
+  const issues = [...file.script.issues, ...unrecognized(file), ...(indexed ? lastProject.get(uri) ?? [] : [])];
   const diagnostics: Diagnostic[] = toDiagnostics(issues, settings);
   const key = JSON.stringify(diagnostics);
   if (published.get(uri) === key) return;
@@ -172,7 +213,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
 
   // Clients without workspace/configuration can pass settings at startup.
   const initial = (params.initializationOptions as { settings?: unknown } | undefined)?.settings;
-  if (initial) applySettings(resolveSettings(initial));
+  if (initial) void applySettings(resolveSettings(initial));
 
   return {
     capabilities: {
@@ -184,9 +225,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       workspaceSymbolProvider: true,
       renameProvider: { prepareProvider: true },
+      completionProvider: { resolveProvider: true, triggerCharacters: ['{', '@', '%'] },
+      codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       workspace: { workspaceFolders: { supported: true, changeNotifications: true } },
     },
-    serverInfo: { name: 'skout', version: '0.2.0' },
+    serverInfo: { name: 'skout', version: '0.3.0' },
   };
 });
 
@@ -215,7 +258,7 @@ connection.onInitialized(async () => {
 
 connection.onDidChangeConfiguration((change) => {
   if (canPullConfiguration) void refreshSettings();
-  else applySettings(resolveSettings((change.settings as { skout?: unknown } | undefined)?.skout));
+  else void applySettings(resolveSettings((change.settings as { skout?: unknown } | undefined)?.skout));
 });
 
 connection.onDidChangeWatchedFiles(async (params) => {
@@ -277,8 +320,60 @@ connection.onReferences(async (params) => {
 connection.onHover(async (params) => {
   await indexing;
   const file = fileFor(params.textDocument.uri);
-  const target = file && targetAt(file, params.position.line, params.position.character);
-  return file && target ? hover(index, file, target, syntax) ?? null : null;
+  if (!file) return null;
+  const target = targetAt(file, params.position.line, params.position.character);
+  if (target) return hover(index, file, target, syntax) ?? null;
+  // Otherwise, the syntax the whole line matched.
+  const node = nodeAt(file, params.position.line);
+  return node ? syntaxHover(file, node, syntax) ?? null : null;
+});
+
+function nodeAt(file: FileIndex, line: number): SkNode | undefined {
+  let found: SkNode | undefined;
+  const visit = (node: SkNode) => {
+    if (node.line === line) found = node;
+    else if (node.line < line && node.lastLine >= line) node.children.forEach(visit);
+  };
+  file.script.structures.forEach(visit);
+  return found;
+}
+
+connection.onCompletion(async (params) => {
+  await indexing;
+  const file = index.get(normalizeUri(params.textDocument.uri));
+  const document = documents.get(params.textDocument.uri);
+  if (!file || !document) return [];
+  const lineText = document
+    .getText({ start: { line: params.position.line, character: 0 }, end: { line: params.position.line + 1, character: 0 } })
+    .replace(/\r?\n$/, '');
+  return completions({ index, registry: syntax, file, lineText, line: params.position.line, character: params.position.character });
+});
+
+connection.onCompletionResolve((item) => resolveCompletion(item, syntax));
+
+connection.onCodeAction((params) => {
+  const actions: CodeAction[] = [];
+  for (const diagnostic of params.context.diagnostics) {
+    const fix = (diagnostic.data as { fix?: Issue['fix'] } | undefined)?.fix;
+    if (diagnostic.source !== 'skout' || !fix) continue;
+    actions.push({
+      title: `Change to '${fix.text}'`,
+      kind: CodeActionKind.QuickFix,
+      diagnostics: [diagnostic],
+      isPreferred: true,
+      edit: {
+        changes: {
+          [params.textDocument.uri]: [{ range: { start: { line: fix.line, character: fix.start }, end: { line: fix.line, character: fix.end } }, newText: fix.text }],
+        },
+      },
+    });
+  }
+  return actions;
+});
+
+connection.onRequest('skout/reloadDumps', async () => {
+  await reloadDumps();
+  return { addons: syntax.addons, skript: syntax.skriptSource };
 });
 
 connection.onWorkspaceSymbol(async (params) => {
@@ -314,6 +409,8 @@ connection.onRequest('skout/status', async () => {
     targetVersion: targetVersion.text,
     builtinsVersion: syntax.version.text,
     bundledVersions: catalog.versions.map((v) => v.text),
+    skriptSyntax: syntax.skriptSource,
+    addons: syntax.addons,
   };
 });
 

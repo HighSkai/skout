@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/HighSkai/skout?color=22c55e"></a>
 </p>
 
-**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Later milestones add addon-aware completion and an upgrade checker.
+**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Completion and docs come from the syntax of *your* server and addons. An upgrade checker is next.
 
 Most Skript extensions stop at syntax highlighting. Skout reads your scripts the way Skript does: its indentation and comment rules are ported from Skript's own config parser, so an error in the editor is an error on your server.
 
@@ -53,6 +53,25 @@ Every `.sk` file in the workspace is indexed in the background, open or not.
 - **Version-aware.** Set `skout.skriptVersion` to your server's version. Skout bundles the built-in syntax of Skript 2.14.3, 2.15.4, 2.16.2 and 2.17.1.
 - **Respects how Skript loads scripts.** Scripts and folders starting with `-` are disabled in Skript, so their functions do not count; Skript's own `config.sk` is never read as a script.
 
+### Syntax intelligence (0.3)
+
+<p align="center">
+  <img src="images/syntax.png" alt="Skout completing send effects with snippets, flagging the typo sned with a quick fix, and showing docs for a broadcast line" width="100%">
+</p>
+
+- **Completion that knows where you are.**
+  - Events after `on` and at the top level.
+  - Effects, conditions and sections at the start of a line.
+  - Only conditions after `if`, `else if` and `while`.
+  - Expressions later in a line or inside `%…%`.
+  - Your functions and the built-in ones.
+  - Variables after `{`, options after `{@`, and command entries (`trigger:`, `permission:`, …) directly under a command.
+
+  Each pattern becomes a snippet with a tab stop per `%type%` slot.
+- **Docs on hover.** Hover a line to see the syntax it matched: its patterns, description, example, the addon it comes from and the version it arrived in.
+- **Typos, with a quick fix.** `sned "hi" to player` gets "Did you mean 'send'?" and a one-click fix. The check only speaks up when changing one word makes the line valid. Lines it cannot place are left alone, so addon syntax Skout does not know about is never flagged. Set `skout.unrecognizedSyntax` to `all` to see every line that matches nothing, with the closest patterns.
+- **Your server's syntax, not a guess.** Skout ships Skript's own syntax for 2.14 to 2.17. Add your addons, or your exact Skript build, with `skout.syntaxDumps`, or download them with **Skout: Download Syntax Dump**; see [Use your server's syntax](#use-your-servers-syntax).
+
 ### Editor basics
 
 - **Outline.** Events, commands, functions and `options:` entries appear in the Outline view and the breadcrumbs.
@@ -67,12 +86,12 @@ Every `.sk` file in the workspace is indexed in the background, open or not.
 |---|---|---|
 | **M1: Foundation** | Parser, highlighting, structural diagnostics | ✅ Released in 0.1 |
 | **M2: Project awareness** | Workspace index; go to definition, references and hover; cross-file function, option and variable checks; Variables view; rename with preview | ✅ Released in 0.2 |
-| **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from a JSON syntax dump of *your* server and addons; conservative "unrecognized syntax" hints | Next |
-| **M4: Upgrade checker** | "Skout: Check upgrade to version X" compares two syntax dumps and reports every line in your project that the new Skript or addon version removes, deprecates or changes | Planned |
+| **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from syntax dumps of *your* server and addons; conservative "unrecognized syntax" hints with quick fixes | ✅ Released in 0.3 |
+| **M4: Upgrade checker** | "Skout: Check upgrade to version X" compares two syntax dumps and reports every line in your project that the new Skript or addon version removes, deprecates or changes | Next |
 
 <!-- GIF: go-to-definition.gif (M2). Record F12 on a function call jumping to another file, then Shift+F12. -->
 <!-- GIF: rename-namespace.gif (M2). Record F2 on {objective::…}, the Refactor Preview, and applying it. -->
-<!-- GIF: completion.gif (M3) -->
+<!-- GIF: completion.gif (M3). Record typing `se` in a trigger, picking `send %objects%`, and tabbing through the slots. -->
 <!-- GIF: upgrade-report.gif (M4) -->
 
 ## Install
@@ -80,7 +99,7 @@ Every `.sk` file in the workspace is indexed in the background, open or not.
 **From a release (VSIX).** Download `skout-<version>.vsix` from the [latest release](https://github.com/HighSkai/skout/releases/latest), then either run **Extensions: Install from VSIX…** from the Command Palette, or:
 
 ```sh
-code --install-extension skout-0.2.0.vsix
+code --install-extension skout-0.3.0.vsix
 ```
 
 **From the Marketplace.** Not published yet. The extension id will be `highskai.skout`.
@@ -89,6 +108,16 @@ code --install-extension skout-0.2.0.vsix
 
 Open any `.sk` file and Skout starts. If another Skript extension is installed, both register the `skript` language; disable the other one's diagnostics if you see duplicates.
 
+## Use your server's syntax
+
+Skout knows Skript's own syntax out of the box. To match your server exactly, give it syntax dumps:
+
+- **Your addons, from SkriptHub.** Run **Skout: Download Syntax Dump**, choose *Addons, from SkriptHub*, and tick the addons your server runs (for example SkBee and Skript-Particle). Skout saves them to `.skout/syntax/` and adds that folder to `skout.syntaxDumps`. This is the only time Skout uses the network, and only when you run the command.
+- **Your addons, from your own server.** Put the [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool) in a copy of your server's `plugins/` folder (its README warns against running it in production) and run `/gendocs`. It writes one file per addon to `plugins/SkriptHubDocsTool/documentation/`. Add that folder to `skout.syntaxDumps`.
+- **Your exact Skript build.** Create the folder `plugins/Skript/docs/templates/` (Skript only registers `/sk gen-docs` when it exists), run `/sk gen-docs`, and add `plugins/Skript/docs/docs.json` to `skout.syntaxDumps`. It replaces the bundled Skript syntax. `/sk gen-docs` covers Skript only, not addons.
+
+Addon functions loaded this way are known to the function checks too, so `skout.knownFunctions` is no longer needed for them. **Skout: Reload Syntax Dumps** picks up changed files.
+
 ## Settings
 
 Every diagnostic category can be switched off.
@@ -96,7 +125,9 @@ Every diagnostic category can be switched off.
 | Setting | Default | What it controls |
 |---|---|---|
 | `skout.skriptVersion` | `""` | Your server's Skript version, e.g. `2.16.2`. Version-dependent rules follow it. Empty means the newest bundled version (2.17.1) |
-| `skout.knownFunctions` | `[]` | Functions provided by addons (for example skript-particle), so calls to them are not reported as undefined |
+| `skout.knownFunctions` | `[]` | Functions provided by addons whose syntax is not loaded, so calls to them are not reported as undefined |
+| `skout.syntaxDumps` | `[]` | Syntax dump files or folders (Skript's `docs.json`, SkriptHub Docs Tool output, downloaded dumps), absolute or relative to the workspace |
+| `skout.unrecognizedSyntax` | `"typos"` | `typos`: report a line only when one changed word makes it valid. `all`: also report every unmatched line, as information. `off` |
 | `skout.diagnostics.indentation` | `true` | Mixed tabs and spaces, wrong indentation depth, and (as information) a file mixing indent styles between structures |
 | `skout.diagnostics.missingColon` | `true` | A line followed by an indented block that does not end with `:` |
 | `skout.diagnostics.unclosed` | `true` | Unclosed quotes, `%` in strings, `{}`, `()` and `[]` |
@@ -130,6 +161,7 @@ Every diagnostic category can be switched off.
 | `invalid-function` | Error | Skript cannot read the function header; the message is Skript's own |
 | `unknown-option` | Error | `undefined option {@name}`, as Skript reports it |
 | `unset-variable` | Warning | The variable is read but never set where it could be |
+| `unrecognized-syntax` | Warning (Information in `all` mode) | The line matches no known syntax; with a quick fix when one word is misspelled |
 
 ### How Skout knows what Skript accepts
 
@@ -141,8 +173,9 @@ Skout does not guess at Skript's rules; it ports them from Skript's source:
 - Function headers, parameters and calls follow `StructFunction`, `FunctionParser` and `FunctionArgumentParser`, including the version differences: overloading since 2.12, `->` return types and named arguments since 2.14.
 - Variables are case-insensitive, as in Skript's default config. A dynamic part such as `%player%` may hold any value, so Skout only warns when no write could possibly match.
 - Argument counts are not checked for built-in functions, because Skript's documentation lists one signature per function and leaves out overloads (it documents `vector(n)` but not `vector(x, y, z)`).
+- Syntax patterns are matched with a port of Skript's own pattern compiler and matchers (`PatternCompiler`, `LiteralPatternElement`, `TypePatternElement`). Skout cannot parse the expression inside a `%slot%`, so any text fits a slot. That makes matching lenient by design: a line that matches nothing is genuinely unknown syntax.
 
-Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions.
+Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions, and no typo warnings at all.
 
 ## Other editors
 
@@ -171,7 +204,7 @@ Bug reports, especially false positives, are very welcome. A false positive is a
 
 - [SkriptLang/Skript](https://github.com/SkriptLang/Skript), whose config parser defines the rules Skout enforces, and whose test scripts are Skout's stress-test corpus.
 - [SkriptLang/skript-docs](https://github.com/SkriptLang/skript-docs): the bundled syntax in `dumps/` is normalized from Skript's published `docs.json` (GPL-3.0).
-- [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool), which will feed addon syntax in M3.
+- [SkriptHub](https://skripthub.net) and its [Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool), the sources of addon syntax.
 - The existing Skript editor tools ([IntelliSkript](https://github.com/JohnHeikens/IntelliSkript), [Sk-VSC](https://github.com/AyhamAl-Ali/Sk-VSC), [r4tsk](https://github.com/RATR2/r4tsk), [SkriptZed](https://github.com/DaisyCatTs/SkriptZed)) for showing what Skript developers want from an editor.
 
 ## License

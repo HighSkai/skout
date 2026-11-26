@@ -2,6 +2,8 @@ import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import { toDiagnostics } from '../src/features/diagnostics';
 import { projectIssues } from '../src/features/project';
+import { unrecognizedIssues } from '../src/features/syntax';
+import { SyntaxRegistry } from '../src/syntax/registry';
 import { WorkspaceIndex } from '../src/index/workspace';
 import { defaultSettings } from '../src/settings';
 import { fixture } from './helpers';
@@ -43,6 +45,26 @@ describe('performance', () => {
     }
     const p95 = percentile(times, 0.95);
     console.log(`2,000-line keystroke: median ${percentile(times, 0.5).toFixed(2)} ms, p95 ${p95.toFixed(2)} ms`);
+    expect(p95).toBeLessThan(100);
+  });
+
+  it('matches every line of a 2,000-line file against Skript syntax within budget', () => {
+    const registry = new SyntaxRegistry(syntax);
+    const index = new WorkspaceIndex(registry.version);
+    const text = bigScript(2000);
+    const cold = performance.now();
+    unrecognizedIssues(index.update('file:///big.sk', text), registry, 'typos');
+    const coldMs = performance.now() - cold;
+    // After that, lines are cached by text: a keystroke re-matches only the line that changed.
+    const times: number[] = [];
+    for (let i = 0; i < 20; i++) {
+      const start = performance.now();
+      const file = index.update('file:///big.sk', `${text}\non join:\n\tsend "edit ${i}" to player`);
+      unrecognizedIssues(file, registry, 'typos');
+      times.push(performance.now() - start);
+    }
+    const p95 = percentile(times, 0.95);
+    console.log(`syntax matching, 2,000 lines: first pass ${coldMs.toFixed(0)} ms, then per keystroke p95 ${p95.toFixed(1)} ms`);
     expect(p95).toBeLessThan(100);
   });
 

@@ -1,0 +1,45 @@
+{
+  "metadata": { "version": "1.4.0" },
+  "events": [
+    {
+      "id": "EvtGizmoCharge",
+      "name": "Gizmo Charge",
+      "description": ["Called when a gizmo finishes charging."],
+      "examples": ["on gizmo charge:\n\tbroadcast \"charged\""],
+      "since": ["1.0.0"],
+      "patterns": ["[on] gizmo charg(e|ing)"],
+      "event values": ["player"],
+      "cancellable": true
+    }
+  ],
+  "effects": [
+    {
+      "id": "EffGizmoLaunch",
+      "name": "Launch Gizmo",
+      "description": ["Launches a gizmo from a location."],
+      "examples": ["launch gizmo at player with power 3"],
+      "since": ["1.2.0"],
+      "patterns": ["launch [a] gizmo at %location% [with power %number%]"],
+      "required plugins": ["Paper"]
+    }
+  ],
+  "conditions": [
+    {
+      "id": "CondGizmoCharged",
+      "name": "Gizmo Is Charged",
+      "description": ["Checks whether a player's gizmo is charged."],
+      "since": ["1.0.0"],
+      "patterns": ["%players%'[s] gizmo (is|are) charged"]
+    }
+  ],
+  "functions": [
+    {
+      "id": "gizmoPower",
+      "name": "gizmoPower",
+      "description": ["The power of a gizmo."],
+      "since": ["1.3.0"],
+      "patterns": ["gizmoPower(level: number, boost: number = 1)"],
+      "return type": "number"
+    }
+  ]
+}

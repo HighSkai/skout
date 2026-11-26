@@ -205,3 +205,91 @@ describe('Skout project awareness (M2)', () => {
     await vscode.commands.executeCommand('skout.variables.focus');
   });
 });
+
+describe('Skout syntax intelligence (M3)', () => {
+  /** Appends lines to admin.sk, runs `body`, then undoes the edit. */
+  async function withLines(lines: string[], body: (editor: vscode.TextEditor, firstLine: number) => Promise<void>): Promise<void> {
+    const uri = fileUri('admin.sk');
+    const editor = await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const last = editor.document.lineCount - 1;
+    const end = editor.document.lineAt(last).range.end;
+    const prefix = editor.document.lineAt(last).text === '' ? '' : '\n';
+    await editor.edit((e) => e.insert(end, prefix + lines.join('\n')));
+    try {
+      await body(editor, prefix ? last + 1 : last);
+    } finally {
+      await vscode.commands.executeCommand('undo');
+    }
+  }
+
+  it('completes effects with snippets at the start of a statement', async () => {
+    await withLines(['\t\tbroa'], async (editor, line) => {
+      const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+        'vscode.executeCompletionItemProvider',
+        editor.document.uri,
+        new vscode.Position(line, 6),
+      );
+      const item = list.items.find((i) => (typeof i.label === 'string' ? i.label : i.label.label) === 'broadcast %objects%');
+      assert.ok(item, 'broadcast is offered');
+      const insert = item.insertText instanceof vscode.SnippetString ? item.insertText.value : String(item.insertText);
+      assert.equal(insert, 'broadcast ${1:objects}');
+    });
+  });
+
+  it('completes events after `on ` at the top level', async () => {
+    await withLines(['on jo'], async (editor, line) => {
+      const list = await vscode.commands.executeCommand<vscode.CompletionList>(
+        'vscode.executeCompletionItemProvider',
+        editor.document.uri,
+        new vscode.Position(line, 5),
+      );
+      assert.ok(list.items.some((i) => (typeof i.label === 'string' ? i.label : i.label.label) === 'join'));
+    });
+  });
+
+  it('shows the docs of the syntax a line matches on hover', async () => {
+    const uri = fileUri('admin.sk');
+    const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', uri, await positionOf(uri, 'send "Price set."', 1));
+    const text = hovers.flatMap((h) => h.contents.map((c) => (typeof c === 'string' ? c : c.value))).join('\n');
+    assert.match(text, /\*\*Message\*\* · Effect · Skript/);
+  });
+
+  it('flags a misspelled effect and fixes it with a quick fix', async () => {
+    await withLines(['\t\tsned "hi" to player'], async (editor, line) => {
+      const codes = await diagnosticsFor(editor.document.uri, (c) => c.includes(`unrecognized-syntax@${line + 1}`));
+      assert.ok(codes.includes(`unrecognized-syntax@${line + 1}`));
+      const actions = await vscode.commands.executeCommand<vscode.CodeAction[]>(
+        'vscode.executeCodeActionProvider',
+        editor.document.uri,
+        new vscode.Range(line, 2, line, 6),
+        vscode.CodeActionKind.QuickFix.value,
+      );
+      const fix = actions.find((a) => a.title === "Change to 'send'");
+      assert.ok(fix?.edit, 'quick fix offered');
+      await vscode.workspace.applyEdit(fix.edit);
+      assert.equal(editor.document.lineAt(line).text, '\t\tsend "hi" to player');
+      await vscode.commands.executeCommand('undo');
+    });
+  });
+
+  it('loads an addon syntax dump from skout.syntaxDumps', async () => {
+    const config = vscode.workspace.getConfiguration('skout');
+    const dump = vscode.Uri.joinPath(vscode.workspace.workspaceFolders![0].uri, '..', 'server', 'test', 'fixtures', 'dumps', 'skripthub-Widgets.json').fsPath;
+    await config.update('syntaxDumps', [dump], vscode.ConfigurationTarget.Workspace);
+    try {
+      await withLines(['\t\tspin widget "w"'], async (editor, line) => {
+        let text = '';
+        for (let attempt = 0; attempt < 50 && !text.includes('Widgets'); attempt++) {
+          const hovers = await vscode.commands.executeCommand<vscode.Hover[]>('vscode.executeHoverProvider', editor.document.uri, new vscode.Position(line, 3));
+          text = hovers.flatMap((h) => h.contents.map((c) => (typeof c === 'string' ? c : c.value))).join('\n');
+          if (!text.includes('Widgets')) await new Promise((resolve) => setTimeout(resolve, 100));
+        }
+        assert.match(text, /\*\*Spin Widget\*\* · Effect · Widgets/);
+      });
+      const status = await api.client.sendRequest<{ addons: string[] }>('skout/status');
+      assert.deepEqual(status.addons, ['Widgets']);
+    } finally {
+      await config.update('syntaxDumps', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+});

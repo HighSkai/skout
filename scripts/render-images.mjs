@@ -251,4 +251,110 @@ writeFileSync(join(images, 'social-preview.png'), png(card(1280, 640, 'github.co
   writeFileSync(join(images, 'project.png'), png(svg, W));
 }
 
-console.log('Rendered icon.png, banner.png, social-preview.png, diagnostics.png and project.png in images/');
+// --- syntax: completion, a typo with its quick fix, and syntax hover, from the server's real output ---
+{
+  const outfile = join(root, 'node_modules', '.cache', 'skout-render', 'syntax.cjs');
+  esbuild.buildSync({
+    stdin: {
+      contents: [
+        "export { WorkspaceIndex } from './server/src/index/workspace';",
+        "export { completions } from './server/src/features/completion';",
+        "export { unrecognizedIssues, syntaxHover } from './server/src/features/syntax';",
+        "export { SyntaxCatalog } from './server/src/syntax/catalog';",
+        "export { SyntaxRegistry } from './server/src/syntax/registry';",
+      ].join('\n'),
+      resolveDir: root,
+      loader: 'ts',
+    },
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile,
+    logLevel: 'silent',
+  });
+  const { WorkspaceIndex, completions, unrecognizedIssues, syntaxHover, SyntaxCatalog, SyntaxRegistry } = require(outfile);
+  const registry = new SyntaxRegistry(SyntaxCatalog.fromDirectory(join(root, 'dumps')).forVersion('2.16.2'));
+  const index = new WorkspaceIndex(registry.version);
+
+  const source = ['on join:', '\tsned "Welcome!" to player', '\tse'];
+  const file = index.update('file:///join.sk', source.join('\n'));
+  const typo = unrecognizedIssues(file, registry, 'typos')[0];
+  const items = completions({ index, registry, file, lineText: source[2], line: 2, character: 3 })
+    .filter((i) => i.filterText.toLowerCase().startsWith('se'))
+    .sort((a, b) => a.sortText.localeCompare(b.sortText))
+    .slice(0, 8);
+  const hoverFile = index.update('file:///hover.sk', 'on join:\n\tbroadcast "Hello!"');
+  const hoverText = syntaxHover(hoverFile, hoverFile.script.structures[0].children[0], registry).contents.value;
+
+  const W = 1280;
+  const H = 470;
+  const charW = 8.8;
+  const codeX = 70;
+  let body = '';
+  source.forEach((line, i) => {
+    const y = 64 + i * 26;
+    body += `<text x="${codeX - 22}" y="${y + 17}" font-family="Consolas" font-size="15" fill="#5a6b62" text-anchor="end">${i + 1}</text>`;
+    const shown = line.replace(/\t/g, '    ');
+    const kw = /^(\s*)(on|sned|se)\b(.*)$/.exec(shown);
+    const parts = kw
+      ? `<tspan>${esc(kw[1])}</tspan><tspan fill="${kw[2] === 'on' ? '#c586c0' : '#d4d4d4'}">${esc(kw[2])}</tspan><tspan fill="#ce9178">${esc(kw[3])}</tspan>`
+      : esc(shown);
+    body += `<text x="${codeX}" y="${y + 17}" font-family="Consolas" font-size="16" fill="#d4d4d4" xml:space="preserve">${parts}</text>`;
+  });
+  // The typo's squiggle and its message.
+  const tx1 = codeX + (4 + typo.start - 1) * charW;
+  const tx2 = codeX + (4 + typo.end - 1) * charW;
+  let d = `M${tx1} ${64 + 26 + 22}`;
+  for (let x = tx1; x < tx2; x += 4) d += ` q1 ${(x - tx1) % 8 === 0 ? -3 : 3} 2 0 t2 0`;
+  body += `<path d="${d}" fill="none" stroke="#cca700" stroke-width="1.4"/>`;
+  body += `<rect x="${codeX + 300}" y="${64 + 26 + 1}" width="${W - codeX - 340}" height="24" rx="4" fill="#3a3214"/>`;
+  body += `<text x="${codeX + 312}" y="${64 + 26 + 18}" font-family="Segoe UI" font-size="13.5" fill="#e8d9a0">${esc(typo.message)}</text>`;
+  body += `<text x="${codeX + 312}" y="${64 + 26 + 40}" font-family="Segoe UI" font-size="12.5" fill="#8b949e">Quick fix: Change to '${esc(typo.fix.text)}'</text>`;
+
+  // The completion popup under line 3.
+  const px = codeX + 4 * charW;
+  const py = 64 + 3 * 26 + 4;
+  const rowH = 26;
+  body += `<rect x="${px}" y="${py}" width="640" height="${items.length * rowH + 8}" rx="5" fill="#252526" stroke="#454545"/>`;
+  items.forEach((item, i) => {
+    const y = py + 4 + i * rowH;
+    if (i === 0) body += `<rect x="${px + 1}" y="${y}" width="638" height="${rowH}" fill="#04395e"/>`;
+    const color = item.kind === 2 ? '#b180d7' : item.kind === 24 ? '#ee9d28' : '#75beff';
+    body += `<rect x="${px + 12}" y="${y + 7}" width="12" height="12" rx="2" fill="none" stroke="${color}" stroke-width="1.6"/>`;
+    body += `<text x="${px + 34}" y="${y + 18}" font-family="Consolas" font-size="14" fill="#e6e6e6">${esc(item.label)}</text>`;
+    body += `<text x="${px + 628}" y="${y + 18}" font-family="Segoe UI" font-size="12" fill="#8b949e" text-anchor="end">${esc(item.detail.split(' · ')[0])}</text>`;
+  });
+
+  // A syntax hover card on the right.
+  const hx = 790;
+  const hy = 190;
+  const lines = [];
+  let inCode = false;
+  for (const raw of hoverText.split('\n')) {
+    if (raw.startsWith('```')) {
+      inCode = !inCode;
+      continue;
+    }
+    if (raw.trim() === '' && (lines.length === 0 || lines.at(-1).text === '')) continue;
+    lines.push({ code: inCode, text: raw.replace(/\*\*/g, '').replace(/`/g, '') });
+  }
+  const shownLines = lines.slice(0, 9);
+  body += `<text x="${hx}" y="${hy - 14}" font-family="Segoe UI" font-size="12.5" fill="#8b949e">Hovering a line: the syntax it matched</text>`;
+  body += `<rect x="${hx}" y="${hy}" width="${W - hx - 40}" height="${shownLines.length * 22 + 26}" rx="6" fill="#252526" stroke="#454545"/>`;
+  shownLines.forEach((l, i) => {
+    const text = l.text.length > 62 ? `${l.text.slice(0, 61)}…` : l.text;
+    body += `<text x="${hx + 16}" y="${hy + 28 + i * 22}" font-family="${l.code ? 'Consolas' : 'Segoe UI'}" font-size="${l.code ? 14 : 13.5}" fill="${l.code ? '#dcdcaa' : '#cccccc'}">${esc(text)}</text>`;
+  });
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" rx="10" fill="#1f1f1f"/>
+  <rect x="0" y="0" width="${W}" height="36" fill="#181818"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f57"/><circle cx="42" cy="18" r="6" fill="#febc2e"/><circle cx="62" cy="18" r="6" fill="#28c840"/>
+  <text x="${W / 2}" y="23" font-family="Segoe UI" font-size="13" fill="#9d9d9d" text-anchor="middle">join.sk — Skript 2.16.2 syntax</text>
+  ${body}
+  <text x="${W - 24}" y="${H - 16}" font-family="Segoe UI" font-size="12.5" fill="#5a6b62" text-anchor="end">Rendered from Skout's real output</text>
+</svg>`;
+  writeFileSync(join(images, 'syntax.png'), png(svg, W));
+}
+
+console.log('Rendered icon.png, banner.png, social-preview.png, diagnostics.png, project.png and syntax.png in images/');
