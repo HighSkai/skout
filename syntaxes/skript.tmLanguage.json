@@ -1,0 +1,209 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Skript",
+  "scopeName": "source.skript",
+  "comment": "Written for Skout. Comment rules follow Skript's own line splitter (ch.njol.skript.config.Node#splitLine): '###' alone on a line toggles a block comment, '##' outside a string is a literal '#', and a single '#' outside a string starts a comment. Everything that depends on installed syntax (effects, expressions, events) is left to the language server.",
+  "patterns": [
+    { "include": "#block-comment" },
+    { "include": "#escaped-hash" },
+    { "include": "#line-comment" },
+    { "include": "#structure" },
+    { "include": "#code" }
+  ],
+  "repository": {
+    "block-comment": {
+      "name": "comment.block.skript",
+      "begin": "^\\s*(###)\\s*$",
+      "end": "^\\s*(###)\\s*$",
+      "beginCaptures": { "1": { "name": "punctuation.definition.comment.begin.skript" } },
+      "endCaptures": { "1": { "name": "punctuation.definition.comment.end.skript" } }
+    },
+    "line-comment": {
+      "name": "comment.line.number-sign.skript",
+      "match": "(#).*$",
+      "captures": { "1": { "name": "punctuation.definition.comment.skript" } }
+    },
+    "structure": {
+      "patterns": [
+        {
+          "comment": "options: / variables: / aliases:",
+          "match": "^(options|variables|aliases)\\s*(:)",
+          "captures": {
+            "1": { "name": "keyword.other.structure.skript" },
+            "2": { "name": "punctuation.separator.section.skript" }
+          }
+        },
+        {
+          "comment": "[local] function name(params) :: returnType:",
+          "begin": "^(?:(local)\\s+)?(function)\\s+([^\\s(]+)\\s*(\\()",
+          "end": "(\\))(?:\\s*(::|returns)\\s*([^:#]+?))?\\s*(:)?\\s*(?=#|$)",
+          "beginCaptures": {
+            "1": { "name": "storage.modifier.skript" },
+            "2": { "name": "keyword.other.function.skript" },
+            "3": { "name": "entity.name.function.skript" },
+            "4": { "name": "punctuation.definition.parameters.begin.skript" }
+          },
+          "endCaptures": {
+            "1": { "name": "punctuation.definition.parameters.end.skript" },
+            "2": { "name": "keyword.operator.return-type.skript" },
+            "3": { "name": "entity.name.type.skript" },
+            "4": { "name": "punctuation.separator.section.skript" }
+          },
+          "patterns": [
+            {
+              "match": "([^\\s,:()]+)\\s*(:)\\s*([^,=)]+?)(?=\\s*(?:=|,|\\)))",
+              "captures": {
+                "1": { "name": "variable.parameter.skript" },
+                "2": { "name": "punctuation.separator.type.skript" },
+                "3": { "name": "entity.name.type.skript" }
+              }
+            },
+            { "include": "#code" }
+          ]
+        },
+        {
+          "comment": "command /name <args>:",
+          "match": "^(command)\\s+(/?[^\\s:#]+)",
+          "captures": {
+            "1": { "name": "keyword.other.command.skript" },
+            "2": { "name": "entity.name.function.command.skript" }
+          }
+        },
+        {
+          "comment": "using <experiment>",
+          "match": "^(using)\\b",
+          "captures": { "1": { "name": "keyword.other.using.skript" } }
+        },
+        {
+          "comment": "on <event>: / every <timespan>: (only the leading keyword is certain)",
+          "match": "^(on|every|at)\\b",
+          "captures": { "1": { "name": "keyword.other.event.skript" } }
+        },
+        {
+          "comment": "Command entries such as permission: or trigger: one level under a command.",
+          "match": "^\\s+(trigger|permission|permission message|description|usage|aliases|executable by|cooldown|cooldown message|cooldown bypass|cooldown storage|prefix)\\s*(:)",
+          "captures": {
+            "1": { "name": "support.type.property-name.skript" },
+            "2": { "name": "punctuation.separator.key-value.skript" }
+          }
+        }
+      ]
+    },
+    "code": {
+      "patterns": [
+        { "include": "#escaped-hash" },
+        { "include": "#line-comment" },
+        { "include": "#string" },
+        { "include": "#variable" },
+        { "include": "#control" },
+        { "include": "#function-call" },
+        { "include": "#number" },
+        { "include": "#constant" },
+        { "include": "#operator" }
+      ]
+    },
+    "escaped-hash": {
+      "name": "constant.character.escape.skript",
+      "match": "##"
+    },
+    "string": {
+      "name": "string.quoted.double.skript",
+      "begin": "\"",
+      "end": "\"(?!\")",
+      "beginCaptures": { "0": { "name": "punctuation.definition.string.begin.skript" } },
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.skript" } },
+      "patterns": [
+        { "name": "constant.character.escape.skript", "match": "\"\"|%%" },
+        { "include": "#interpolation" },
+        { "include": "#formatting" }
+      ]
+    },
+    "interpolation": {
+      "name": "meta.embedded.expression.skript",
+      "begin": "%",
+      "end": "%",
+      "beginCaptures": { "0": { "name": "punctuation.section.embedded.begin.skript" } },
+      "endCaptures": { "0": { "name": "punctuation.section.embedded.end.skript" } },
+      "contentName": "source.skript",
+      "patterns": [
+        { "include": "#string" },
+        { "include": "#variable" },
+        { "include": "#function-call" },
+        { "include": "#number" },
+        { "include": "#constant" }
+      ]
+    },
+    "formatting": {
+      "patterns": [
+        {
+          "comment": "Legacy colour and format codes: &a, &l, &r, and &x hex sequences",
+          "name": "constant.other.color.skript",
+          "match": "[&§][0-9a-fk-orA-FK-ORxX]"
+        },
+        {
+          "comment": "Skript hex colour tags: <#ff0000> and <##ff0000>",
+          "name": "constant.other.color.skript",
+          "match": "<##?[0-9a-fA-F]{6}>"
+        },
+        {
+          "comment": "MiniMessage-style tags such as <red> or </bold>",
+          "name": "entity.name.tag.skript",
+          "match": "</?[a-zA-Z_][\\w:-]*(?::[^>\"%]*)?>"
+        }
+      ]
+    },
+    "variable": {
+      "patterns": [
+        {
+          "comment": "{@option} references",
+          "name": "variable.other.constant.option.skript",
+          "match": "\\{@[^{}]+\\}"
+        },
+        {
+          "name": "variable.other.readwrite.skript",
+          "begin": "\\{(_)?",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.variable.begin.skript" },
+            "1": { "name": "storage.modifier.local.skript" }
+          },
+          "endCaptures": { "0": { "name": "punctuation.definition.variable.end.skript" } },
+          "patterns": [
+            { "include": "#interpolation" },
+            { "name": "punctuation.separator.list.skript", "match": "::" },
+            { "name": "keyword.operator.wildcard.skript", "match": "\\*" }
+          ]
+        }
+      ]
+    },
+    "control": {
+      "patterns": [
+        {
+          "comment": "Section and flow keywords at the start of a line. Their full patterns come from Skript's SecConditional, SecLoop, SecWhile and SecFor.",
+          "match": "^\\s*(else\\s+parse\\s+if|else\\s+if|else|parse\\s+if|if|do\\s+while|while|for\\s+each|for|loop|then|catch\\s+run\\s*time\\s+errors?|catch\\s+errors?)\\b",
+          "captures": { "1": { "name": "keyword.control.skript" } }
+        },
+        {
+          "match": "^\\s*(return|stop|exit|continue|wait|halt)\\b",
+          "captures": { "1": { "name": "keyword.control.flow.skript" } }
+        }
+      ]
+    },
+    "function-call": {
+      "match": "\\b([A-Za-z_][A-Za-z0-9_]*)(?=\\()",
+      "captures": { "1": { "name": "entity.name.function.call.skript" } }
+    },
+    "number": {
+      "name": "constant.numeric.skript",
+      "match": "(?<![\\w.-])-?\\d+(?:\\.\\d+)?(?![\\w.])"
+    },
+    "constant": {
+      "name": "constant.language.boolean.skript",
+      "match": "\\b(true|false)\\b"
+    },
+    "operator": {
+      "name": "keyword.operator.skript",
+      "match": "::|(?<=\\s)(=|<|>|<=|>=|!=|\\+|-|\\*|/)(?=\\s)"
+    }
+  }
+}

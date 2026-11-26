@@ -1,0 +1,16 @@
+# Every line marked below has exactly one problem. The integration test checks them.
+options:
+	accent: <#f5c542>
+
+on join:
+	if player has played before
+		send "Welcome back!" to player
+	send "Sale: 50% off" to player
+	set {_coins to 10
+		send "too deep"
+
+on quit:
+
+command /broken:
+	trigger:
+		send "unclosed to player

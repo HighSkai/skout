@@ -1,0 +1,34 @@
+name: False positive
+description: Skout reports a problem on a line that Skript accepts.
+labels: [false positive]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks! False positives are the most important bugs Skout can have.
+  - type: textarea
+    id: code
+    attributes:
+      label: The Skript code
+      description: The smallest snippet that still shows the problem, including the lines around it. Keep tabs and spaces as they are.
+      render: applescript
+    validations:
+      required: true
+  - type: input
+    id: diagnostic
+    attributes:
+      label: What Skout reports
+      placeholder: "missing-colon on line 3: Missing ':' at the end of this line…"
+    validations:
+      required: true
+  - type: input
+    id: skript
+    attributes:
+      label: Skript version and addons
+      placeholder: Skript 2.16.2, SkBee 3.11, skript-particle 1.3
+    validations:
+      required: true
+  - type: textarea
+    id: reload
+    attributes:
+      label: What `/sk reload` says
+      description: Confirms that Skript accepts the code.

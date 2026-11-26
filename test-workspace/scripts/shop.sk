@@ -1,0 +1,41 @@
+# A paged shop GUI. Indented with tabs.
+options:
+	prefix: &8[&6Shop&8]&r
+	# A literal # in options must be doubled, or it starts a comment.
+	accent: <##f5c542>
+	max-page: 3
+
+command /shop [<integer>]:
+	permission: shop.use
+	permission message: &cYou can't open the shop (yet)!
+	aliases: store, market
+	usage: /shop [page]
+	trigger:
+		set {_page} to arg-1 ? 1
+		if {_page} > {@max-page}:
+			send "{@prefix} &cThat page doesn't exist." to player
+			stop
+		openShop(player, {_page})
+
+function openShop(p: player, page: integer = 1):
+	set {_gui} to chest inventory with 6 rows named "{@prefix} Page %{_page}%"
+	set {_slot} to 0
+	loop {shop::items::*}:
+		if {_slot} >= 45:
+			stop loop
+		set {_item} to loop-value
+		if {shop::price::%loop-index%} is not set:
+			continue
+		else if {shop::price::%loop-index%} <= 0:
+			set slot {_slot} of {_gui} to {_item} named "&7%loop-index% &8(free)"
+		else:
+			set slot {_slot} of {_gui} to {_item} with lore "&7Price: &a$%{shop::price::%loop-index%}%"
+		add 1 to {_slot}
+	set slot 49 of {_gui} to barrier named "&cClose"
+	open {_gui} to {_p}
+
+on inventory click:
+	if name of event-inventory contains "{@prefix}":
+		cancel event
+		if index of event-slot is 49:
+			close player's inventory

@@ -1,0 +1,140 @@
+{
+  "name": "skout",
+  "displayName": "Skout",
+  "description": "Version-aware Skript language server: errors as you type, addon-aware completion, project navigation and an upgrade checker.",
+  "version": "0.1.0",
+  "publisher": "highskai",
+  "license": "GPL-3.0-only",
+  "icon": "images/icon.png",
+  "homepage": "https://github.com/HighSkai/skout#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HighSkai/skout.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HighSkai/skout/issues"
+  },
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "skript",
+    "minecraft",
+    "sk",
+    "paper",
+    "spigot",
+    "language server",
+    "lsp"
+  ],
+  "galleryBanner": {
+    "color": "#14231b",
+    "theme": "dark"
+  },
+  "main": "./dist/client.js",
+  "activationEvents": [
+    "onLanguage:skript",
+    "workspaceContains:**/*.sk"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "skript",
+        "aliases": [
+          "Skript",
+          "skript"
+        ],
+        "extensions": [
+          ".sk"
+        ],
+        "configuration": "./language-configuration.json",
+        "icon": {
+          "light": "./images/file-icon.svg",
+          "dark": "./images/file-icon.svg"
+        }
+      }
+    ],
+    "grammars": [
+      {
+        "language": "skript",
+        "scopeName": "source.skript",
+        "path": "./syntaxes/skript.tmLanguage.json"
+      }
+    ],
+    "configuration": {
+      "title": "Skout",
+      "properties": {
+        "skout.diagnostics.indentation": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report indentation that Skript rejects: mixed tabs and spaces, and lines indented deeper or shallower than their section allows."
+        },
+        "skout.diagnostics.missingColon": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report lines that are followed by an indented block but do not end with `:`."
+        },
+        "skout.diagnostics.unclosed": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report unclosed or unmatched quotes, `%` in strings, `{}` variables, `()` and `[]`."
+        },
+        "skout.diagnostics.emptySection": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report sections (lines ending in `:`) that have nothing indented under them."
+        },
+        "skout.diagnostics.comments": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report unclosed `###` block comments, and a `#` that silently starts a comment in the middle of a value (for example `<#ff0000>` in `options:`)."
+        },
+        "skout.trace.server": {
+          "type": "string",
+          "enum": [
+            "off",
+            "messages",
+            "verbose"
+          ],
+          "default": "off",
+          "description": "Log the communication between VS Code and the Skout language server."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "node scripts/build.mjs --tests && node dist/test/runTest.js",
+    "corpus": "node scripts/fetch-corpus.mjs",
+    "bench": "vitest bench --run",
+    "package": "node scripts/build.mjs --production && vsce package --no-dependencies",
+    "vscode:prepublish": "node scripts/build.mjs --production",
+    "images": "node scripts/render-images.mjs"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.0",
+    "@types/vscode": "~1.91.0",
+    "@vscode/test-electron": "^3.1.0",
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.28.2",
+    "mocha": "^12.0.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.2",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^11.0.1",
+    "vscode-languageserver": "^11.0.1",
+    "vscode-languageserver-textdocument": "^1.0.16"
+  }
+}

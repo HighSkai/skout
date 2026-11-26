@@ -1,0 +1,35 @@
+# Quest tracking. Indented with four spaces.
+variables:
+    {quest::settings::max-active} = 3
+
+on join:
+    if {quest::%player's uuid%::active::*} is not set:
+        set {quest::%player's uuid%::active::*} to "tutorial"
+    send "&aWelcome back! You have %size of {quest::%player's uuid%::active::*}% active quest(s)." to player
+
+function questProgress(p: player, quest: text) :: number:
+    set {_uuid} to uuid of {_p}
+    set {_done} to {quest::%{_uuid}%::%{_quest}%::done} ? 0
+    set {_goal} to {quest::goals::%{_quest}%} ? 1
+    return {_done} / {_goal}
+
+function completeQuest(p: player, quest: text):
+    remove {_quest} from {quest::%uuid of {_p}%::active::*}
+    add {_quest} to {quest::%uuid of {_p}%::completed::*}
+    loop all players:
+        if loop-player is {_p}:
+            send title "&6Quest complete!" with subtitle "&e%{_quest}%" to loop-player
+        else if loop-player has permission "server.staff":
+            send "&7[Staff] %{_p}% completed %{_quest}%" to loop-player
+
+every 5 minutes:
+    loop all players:
+        set {_progress} to questProgress(loop-player, "tutorial")
+        if {_progress} >= 1:
+            completeQuest(loop-player, "tutorial")
+
+###
+Old quest board code, kept for reference.
+on right click on sign:
+send "not indented, but inside a block comment so Skript ignores it
+###

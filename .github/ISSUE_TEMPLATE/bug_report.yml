@@ -1,0 +1,28 @@
+name: Bug report
+description: Something else is broken (a crash, a missed error, wrong highlighting).
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: code
+    attributes:
+      label: Skript code that shows it
+      render: applescript
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: Skout 0.1.0, VS Code 1.147, Skript 2.16.2
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output from the Skout channel
+      description: Set `skout.trace.server` to `messages`, reproduce, then copy the **Skout** output channel.
+      render: text

@@ -1,0 +1,16 @@
+name: Feature request
+description: Suggest a check, a navigation feature or anything else.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it help you do?
+      description: Describe the situation in your scripts, not only the feature.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Skript code
+      render: applescript

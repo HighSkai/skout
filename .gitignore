@@ -1,0 +1,11 @@
+node_modules/
+dist/
+*.vsix
+.vscode-test/
+# Skript's own test scripts, downloaded by `npm run corpus` for the parser stress test.
+.corpus/
+*.log
+.DS_Store
+
+# Written by the integration test when it toggles a setting.
+test-workspace/.vscode/

@@ -1,0 +1,23 @@
+options:
+	board-title: &e&lMY SERVER
+	refresh: 2 seconds
+
+on join:
+	wait 1 tick
+	while player is online:
+		set {_lines::*} to "&7Coins: &6%{stats::%player's uuid%::coins} ? 0%" and "&7Level: &b%{stats::%player's uuid%::level} ? 1%"
+		set {_i} to 15
+		loop {_lines::*}:
+			# Scores count down from 15 so the first line is on top.
+			set {stats::board::%player's uuid%::%{_i}%} to loop-value # one sidebar line
+			remove 1 from {_i}
+		send action bar "{@board-title}" to player
+		wait {@refresh}
+
+on death of player:
+	add 1 to {stats::%victim's uuid%::deaths}
+	if attacker is a player:
+		add 1 to {stats::%attacker's uuid%::kills}
+		send "<#ff5555>You killed %victim%! #1 on the board" to attacker
+	else:
+		broadcast "&7%victim% died. Chance of a drop: 50%% "
