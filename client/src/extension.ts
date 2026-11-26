@@ -2,6 +2,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
 import { downloadSyntaxDump } from './downloadDump';
+import { checkUpgrade } from './upgrade';
 import { registerVariablesView } from './variablesView';
 
 let client: LanguageClient | undefined;
@@ -47,8 +48,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<SkoutA
   registerVariablesView(context, client);
   registerStatus(context, client);
   const languageClient = client;
+  // Upgrade findings live in their own collection, so they can be cleared without touching live diagnostics.
+  const upgradeProblems = vscode.languages.createDiagnosticCollection('skout-upgrade');
+  context.subscriptions.push(upgradeProblems);
   context.subscriptions.push(
     vscode.commands.registerCommand('skout.downloadSyntaxDump', () => downloadSyntaxDump(languageClient)),
+    vscode.commands.registerCommand('skout.checkUpgrade', () => checkUpgrade(languageClient, upgradeProblems)),
+    vscode.commands.registerCommand('skout.clearUpgradeResults', () => upgradeProblems.clear()),
     vscode.commands.registerCommand('skout.reloadSyntaxDumps', async () => {
       const result = await languageClient.sendRequest<{ addons: string[]; skript: string }>('skout/reloadDumps');
       void vscode.window.showInformationMessage(

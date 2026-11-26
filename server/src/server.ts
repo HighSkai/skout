@@ -8,7 +8,7 @@
  * file re-parses only that file and publishes its own diagnostics at once;
  * cross-file diagnostics follow shortly after, debounced.
  */
-import { join } from 'node:path';
+import { basename, dirname, join, relative, sep } from 'node:path';
 import {
   createConnection,
   DidChangeConfigurationNotification,
@@ -17,6 +17,7 @@ import {
   ProposedFeatures,
   TextDocuments,
   TextDocumentSyncKind,
+  ResponseError,
   CodeActionKind,
   type CodeAction,
   type Diagnostic,
@@ -41,8 +42,11 @@ import { defaultSettings, resolveSettings, type SkoutSettings } from './settings
 import { parseVersion, type Version } from './skript/version';
 import { SyntaxCatalog } from './syntax/catalog';
 import { loadDumps } from './syntax/load';
-import { SyntaxRegistry, type LoadedDump } from './syntax/registry';
+import { isSkriptDump, SyntaxRegistry, type LoadedDump } from './syntax/registry';
+import { checkUpgrade, type UpgradeScope, type UpgradeSide } from './upgrade/check';
+import { renderReport } from './upgrade/report';
 
+const SKOUT_VERSION = '0.4.0';
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
@@ -229,7 +233,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       workspace: { workspaceFolders: { supported: true, changeNotifications: true } },
     },
-    serverInfo: { name: 'skout', version: '0.3.0' },
+    serverInfo: { name: 'skout', version: SKOUT_VERSION },
   };
 });
 
@@ -400,6 +404,70 @@ connection.onRenameRequest(async (params) => {
 connection.onRequest('skout/variables', async () => {
   await indexing;
   return variablesTree(index);
+});
+
+interface UpgradeParams {
+  /** Upgrade Skript to this version (bundled syntax, or `dumpPath` when given). */
+  readonly skriptVersion?: string;
+  /** A syntax dump for the target: Skript's docs.json, or a newer dump of `addon`. */
+  readonly dumpPath?: string;
+  /** Upgrade this addon instead of Skript. */
+  readonly addon?: string;
+  /** Where the client will save the report, so links in it are relative to it. */
+  readonly reportPath?: string;
+}
+
+connection.onRequest('skout/upgrade', async (params: UpgradeParams) => {
+  await indexing;
+  const loadTarget = async (path: string): Promise<LoadedDump> => {
+    const loaded = await loadDumps([path], workspaceFolders);
+    if (loaded.dumps.length === 0) throw new ResponseError(1, `Skout could not read the syntax dump: ${loaded.errors[0] ?? path}`);
+    return loaded.dumps[0];
+  };
+
+  let from: UpgradeSide;
+  let to: UpgradeSide;
+  let scope: UpgradeScope;
+  if (params.addon) {
+    const addon = params.addon;
+    if (!params.dumpPath) throw new ResponseError(1, 'Choose a syntax dump of the newer addon version.');
+    const target = await loadTarget(params.dumpPath);
+    // The other dumps stay as they are; only this addon's entries are swapped.
+    const others = userDumps.map((d) => ({ path: d.path, dump: { ...d.dump, entries: d.dump.entries.filter((e) => e.addon !== addon) } }));
+    const registry = new SyntaxRegistry(catalog.forVersion(settings.skriptVersion || undefined), [...others, target], { dropRemoved: true });
+    const current = settings.addonVersions[addon] || userDumps.map((d) => d.dump.addons[addon]).find((v) => v) || 'current';
+    const next = target.dump.addons[addon] || basename(params.dumpPath);
+    from = { registry: syntax, version: targetVersion, label: `${addon} ${current}` };
+    to = { registry, version: targetVersion, label: `${addon} ${next}` };
+    scope = { kind: 'addon', addon };
+  } else {
+    const version = parseVersion(params.skriptVersion);
+    if (!version) throw new ResponseError(1, 'Choose the Skript version to upgrade to.');
+    const addons = userDumps.filter((d) => !isSkriptDump(d.dump));
+    const dumps = params.dumpPath ? [await loadTarget(params.dumpPath), ...addons] : addons;
+    const registry = new SyntaxRegistry(catalog.forVersion(version.text), dumps);
+    const exact = params.dumpPath || registry.version.text === version.text;
+    from = { registry: syntax, version: targetVersion, label: `Skript ${targetVersion.text}` };
+    to = { registry, version, label: `Skript ${version.text}${exact ? '' : ` (syntax of ${registry.version.text})`}` };
+    scope = { kind: 'skript' };
+  }
+
+  const result = checkUpgrade(index, from, to, scope);
+  const reportDir = params.reportPath ? dirname(params.reportPath) : workspaceFolders[0];
+  const markdown = renderReport(result, {
+    linkFor: (uri, line) => {
+      const path = toPath(uri);
+      return path && reportDir ? `${encodeURI(relative(reportDir, path).split(sep).join('/'))}#L${line + 1}` : `${uri}#L${line + 1}`;
+    },
+    nameFor: (uri) => {
+      const path = toPath(uri);
+      const folder = path && workspaceFolders.find((f) => path.startsWith(f));
+      return path && folder ? relative(folder, path).split(sep).join('/') : uri;
+    },
+    date: new Date().toISOString().slice(0, 10),
+    skoutVersion: SKOUT_VERSION,
+  });
+  return { result, markdown };
 });
 
 connection.onRequest('skout/status', async () => {

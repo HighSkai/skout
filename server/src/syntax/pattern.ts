@@ -143,6 +143,20 @@ export interface CompiledPattern {
   readonly words: readonly string[];
   /** Literal words outside optional parts: one of them is always in a matching line. */
   readonly anchors: readonly string[];
+  /** Starts with fixed words rather than a slot, so it can only match lines that begin with them. */
+  readonly anchored: boolean;
+}
+
+/** Whether the first element that must be present is literal text (or a choice of literal texts). */
+function startsWithText(seq: Element[]): boolean {
+  for (const e of seq) {
+    if (e.t === 'tag' || e.t === 'opt' || (e.t === 'lit' && e.text.trim() === '')) continue;
+    if (e.t === 'lit') return true;
+    if (e.t === 'group') return startsWithText(e.body);
+    if (e.t === 'choice') return e.alts.every((alt) => startsWithText(alt));
+    return false;
+  }
+  return false;
 }
 
 export function compilePattern(source: string): CompiledPattern {
@@ -190,7 +204,7 @@ export function compilePattern(source: string): CompiledPattern {
     }
   };
   collect(elements, false);
-  return { source, elements, head, required, words: [...words], anchors: [...anchors] };
+  return { source, elements, head, required, words: [...words], anchors: [...anchors], anchored: startsWithText(elements) };
 }
 
 function javaRegex(source: string): RegExp {

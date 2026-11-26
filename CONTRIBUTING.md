@@ -26,6 +26,7 @@ server/src/       the language server; never imports `vscode`
   index/          per-file extraction (functions, calls, variables, options) and the workspace index
   syntax/         dump schema and importers, the bundled catalog, Skript's pattern compiler and matcher, the registry
   features/       LSP features (diagnostics, navigation, rename, outline, variables view, completion, syntax hover)
+  upgrade/        the upgrade checker: workspace check, version diff, release-note changes, Markdown report
 dumps/            bundled built-in syntax, normalized from Skript's docs.json (GPL-3.0)
 server/test/      unit tests (vitest) and fixtures/*.sk
 syntaxes/         TextMate grammar
@@ -43,6 +44,7 @@ The server must stay editor-agnostic. Anything that needs the VS Code API belong
 | `npm run corpus` | Downloads Skript's own 587 scripts (pinned to 2.17.1) into `.corpus/`, after which `npm test` also parses all of them |
 | `npm run test:integration` | Starts VS Code with the extension, opens `test-workspace/` and checks diagnostics, settings and the outline |
 | `npm run typecheck` | TypeScript without emitting |
+| `npm run sample-report` | Regenerates `docs/sample-upgrade-report.md` from the upgrade fixture |
 | `npm run dumps` | Re-downloads Skript's docs.json for the bundled versions and rewrites `dumps/` (run when Skript releases) |
 
 Run `npm run corpus` once before you change the parser or the index. The corpus test fails on any error Skout reports in a script Skript accepts, and runs the cross-file checks over Skript's test suite too.
@@ -53,9 +55,10 @@ Run `npm run corpus` once before you change the parser or the index. The corpus 
 
 1. **Check Skript's source, never memory.** Every rule must trace back to Skript's code or documentation. Put a link or the class name in a comment, as `parser.ts` does for `SectionNode#load_i`.
 2. **A false positive is worse than a miss.** If a check cannot be sure, it should stay quiet or lower its severity. `missing-colon`, for example, is only claimed for lines that can only be section headers.
-3. **Add a fixture.** Every new check needs a test with a line that triggers it and a realistic line that must not.
+3. **Upgrade rules come from data or release notes.** A behaviour change in `server/src/upgrade/known.ts` must link the release that announced it.
+4. **Add a fixture.** Every new check needs a test with a line that triggers it and a realistic line that must not.
    Test addon syntax with made-up addons in the real formats (see `server/test/fixtures/dumps/`), never copies of real addon docs.
-4. **Keep it fast.** The performance test fails above 100 ms for a keystroke in a 2,000-line file (about 9 ms today) or above 1 s for the cross-file pass over 100,000 lines (about 45 ms).
+5. **Keep it fast.** The performance test fails above 100 ms for a keystroke in a 2,000-line file (about 9 ms today) or above 1 s for the cross-file pass over 100,000 lines (about 45 ms).
 
 ## Images
 

@@ -1,0 +1,22 @@
+command /secret:
+	permission: admin.secret
+	permission message: &cNo.
+	trigger:
+		send "Run by %executor%" to player
+		send "Last used %last usage date%" to player
+		locally suppress deprecated syntax warning
+
+on chat:
+	set chat format to "[player]: [message]"
+
+function entity(id: uuid) :: entity:
+	return {_id}
+
+function grow(t: structure type, at: location):
+	stop
+
+function plant(t: tree type):
+	stop
+
+on gamemode change:
+	send "changed" to player

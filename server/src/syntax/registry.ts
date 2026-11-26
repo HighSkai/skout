@@ -50,7 +50,11 @@ export class SyntaxRegistry implements BuiltinSyntax {
   private readonly cache = new Map<string, PatternRef | null>();
   private readonly vocabularies = new Map<string, Set<string>>();
 
-  constructor(bundled: SkriptSyntax, dumps: readonly LoadedDump[] = []) {
+  /**
+   * @param options.dropRemoved leave out entries SkriptHub marks as removed, to
+   *   describe the newest version of an addon (the upgrade checker's target).
+   */
+  constructor(bundled: SkriptSyntax, dumps: readonly LoadedDump[] = [], options: { dropRemoved?: boolean } = {}) {
     // A Skript dump from the user's own server replaces the bundled one.
     const own = dumps.find((d) => isSkriptDump(d.dump));
     const skript = own?.dump ?? bundled.dump;
@@ -64,6 +68,7 @@ export class SyntaxRegistry implements BuiltinSyntax {
       for (const entry of dump.entries) {
         // SkriptHub also lists Skript's own syntax, older than the dump in use.
         if (entry.addon.toLowerCase() === 'skript') continue;
+        if (options.dropRemoved && entry.removedIn) continue;
         entries.push(entry);
         addons.add(entry.addon);
       }
@@ -103,9 +108,12 @@ export class SyntaxRegistry implements BuiltinSyntax {
     return list;
   }
 
-  /** The first pattern of the given kinds that matches `text`, cached by text. */
+  /**
+   * The first pattern of the given kinds that matches `text`, cached by text.
+   * Results are cached per exclusion filter, told apart by the function's name.
+   */
   match(kinds: readonly SyntaxKind[], text: string, exclude?: (ref: PatternRef) => boolean): PatternRef | undefined {
-    const key = `${kinds.join(',')}\u0000${exclude ? 'x' : ''}\u0000${text}`;
+    const key = `${kinds.join(',')}\u0000${filterKey(exclude)}\u0000${text}`;
     if (this.cache.has(key)) return this.cache.get(key) ?? undefined;
     let hit: PatternRef | undefined;
     outer: for (const kind of kinds) {
@@ -128,21 +136,39 @@ export class SyntaxRegistry implements BuiltinSyntax {
    * SkBee's `open real anvil inventory to player`; for docs, the specific one wins.
    */
   bestMatch(kinds: readonly SyntaxKind[], text: string, exclude?: (ref: PatternRef) => boolean): PatternRef | undefined {
-    const key = `best\u0000${kinds.join(',')}\u0000${exclude ? 'x' : ''}\u0000${text}`;
+    const key = `best\u0000${kinds.join(',')}\u0000${filterKey(exclude)}\u0000${text}`;
     if (this.cache.has(key)) return this.cache.get(key) ?? undefined;
     let best: PatternRef | undefined;
-    let bestScore = -1;
-    for (const kind of kinds) {
-      for (const ref of this.patterns(kind)) {
-        if (isCatchAll(ref.pattern) || exclude?.(ref)) continue;
-        const score = ref.pattern.required.reduce((n, w) => n + w.length, 0);
-        if (score <= bestScore || !matches(ref.pattern, text)) continue;
+    // Patterns are tried most specific first, so the first match is the answer.
+    for (const ref of this.bySpecificity(kinds)) {
+      if (isCatchAll(ref.pattern) || exclude?.(ref)) continue;
+      if (matches(ref.pattern, text)) {
         best = ref;
-        bestScore = score;
+        break;
       }
     }
     this.cache.set(key, best ?? null);
     return best;
+  }
+
+  private readonly specific = new Map<string, PatternRef[]>();
+
+  private bySpecificity(kinds: readonly SyntaxKind[]): PatternRef[] {
+    const key = kinds.join(',');
+    let list = this.specific.get(key);
+    if (!list) {
+      // A pattern that starts with fixed words (`set …`, `launch …`) beats one that starts
+      // with a slot: a leading slot fits any text, so `%command senders% command %texts%`
+      // would otherwise claim every line that contains "command".
+      const score = (ref: PatternRef) => (ref.pattern.anchored ? 1000 : 0) + ref.pattern.required.reduce((n, w) => n + w.length, 0);
+      list = kinds
+        .flatMap((kind) => this.patterns(kind))
+        .map((ref, order) => ({ ref, order, score: score(ref) }))
+        .sort((a, b) => b.score - a.score || a.order - b.order)
+        .map((x) => x.ref);
+      this.specific.set(key, list);
+    }
+    return list;
   }
 
   /** Every literal word in patterns of these kinds, for typo suggestions. */
@@ -159,6 +185,11 @@ export class SyntaxRegistry implements BuiltinSyntax {
 }
 
 
-function isSkriptDump(dump: SyntaxDump): boolean {
+function filterKey(exclude: ((ref: PatternRef) => boolean) | undefined): string {
+  if (!exclude) return '';
+  return exclude.name || 'anonymous';
+}
+
+export function isSkriptDump(dump: SyntaxDump): boolean {
   return dump.source === 'skript-docs' || (dump.source === 'skripthub-docs-tool' && Object.keys(dump.addons).some((a) => a.toLowerCase() === 'skript'));
 }

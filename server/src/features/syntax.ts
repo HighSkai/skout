@@ -37,7 +37,7 @@ const EVENT: SyntaxKind[] = ['event'];
 const STRUCTURE: SyntaxKind[] = ['structure'];
 
 /** SecConditional's own patterns are handled here, so they never match a plain statement. */
-const isConditional = (ref: PatternRef) => ref.entry.id === 'SecConditional';
+export const isConditional = (ref: PatternRef) => ref.entry.id === 'SecConditional';
 
 const CALL_ONLY = /^[\p{Alphabetic}_][\p{Alphabetic}\d_]*\(.*\)$/u;
 /** `key: value` lines inside addon sections are entries, not statements. */
@@ -222,7 +222,7 @@ function findTypo(syntax: LineSyntax, registry: SyntaxRegistry): Typo | undefine
 }
 
 /** Patterns sharing the most literal words with the line. */
-function closestPatterns(syntax: LineSyntax, registry: SyntaxRegistry): PatternRef[] {
+export function closestPatterns(syntax: LineSyntax, registry: SyntaxRegistry): PatternRef[] {
   const words = new Set(syntax.text.toLowerCase().match(/[\p{L}][\p{L}'-]*/gu) ?? []);
   const scored: { ref: PatternRef; score: number }[] = [];
   for (const kind of syntax.kinds) {

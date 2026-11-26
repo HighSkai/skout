@@ -97,7 +97,7 @@ async function downloadAddons(target: vscode.Uri): Promise<string[]> {
   return written;
 }
 
-async function fetchText(url: string, title: string): Promise<string | undefined> {
+export async function fetchText(url: string, title: string): Promise<string | undefined> {
   return vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, async (_progress, token) => {
     const controller = new AbortController();
     token.onCancellationRequested(() => controller.abort());

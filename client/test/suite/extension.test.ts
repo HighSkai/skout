@@ -293,3 +293,38 @@ describe('Skout syntax intelligence (M3)', () => {
     }
   });
 });
+
+describe('Skout upgrade checker (M4)', () => {
+  it('registers the upgrade commands', async () => {
+    const commands = await vscode.commands.getCommands(true);
+    assert.ok(commands.includes('skout.checkUpgrade'));
+    assert.ok(commands.includes('skout.clearUpgradeResults'));
+  });
+
+  it('checks the workspace against a newer Skript and writes a report', async () => {
+    const config = vscode.workspace.getConfiguration('skout');
+    await config.update('skriptVersion', '2.16.2', vscode.ConfigurationTarget.Workspace);
+    try {
+      // The server picks up the version change; wait until it reports it.
+      for (let i = 0; i < 50; i++) {
+        const status = await api.client.sendRequest<{ targetVersion: string }>('skout/status');
+        if (status.targetVersion === '2.16.2') break;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      const folder = vscode.workspace.workspaceFolders![0].uri;
+      const reportPath = vscode.Uri.joinPath(folder, '.skout', 'reports', 'test-report.md').fsPath;
+      const response = await api.client.sendRequest<{
+        result: { from: string; to: string; findings: { uri: string; line: number; kind: string; message: string }[] };
+        markdown: string;
+      }>('skout/upgrade', { skriptVersion: '2.17.1', reportPath });
+      assert.equal(response.result.from, 'Skript 2.16.2');
+      assert.equal(response.result.to, 'Skript 2.17.1');
+      const found = response.result.findings.map((f) => `${f.kind}@${f.uri.slice(f.uri.lastIndexOf('/') + 1)}:${f.line + 1}`);
+      assert.deepEqual(found, ['behaviour@shop.sk:10']);
+      assert.match(response.markdown, /^# Upgrade check: Skript 2\.16\.2 → Skript 2\.17\.1/);
+      assert.match(response.markdown, /\[scripts\/shop\.sk:10\]\(\.\.\/\.\.\/scripts\/shop\.sk#L10\)/);
+    } finally {
+      await config.update('skriptVersion', undefined, vscode.ConfigurationTarget.Workspace);
+    }
+  });
+});

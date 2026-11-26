@@ -1,8 +1,8 @@
 {
   "name": "skout",
   "displayName": "Skout",
-  "description": "Skript language server: errors as you type, completion and docs from your own server's syntax, go to definition, rename and a variables view across your whole project.",
-  "version": "0.3.0",
+  "description": "Skript language server: errors as you type, completion and docs from your own server's syntax, project navigation, and an upgrade checker that lists what a new Skript or addon version breaks.",
+  "version": "0.4.0",
   "publisher": "highskai",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
@@ -73,6 +73,14 @@
           "pattern": "^$|^d+.d+(.d+)?(-[w.]+)?$",
           "patternErrorMessage": "A Skript version such as 2.16.2, or empty for the newest bundled version.",
           "markdownDescription": "The Skript version your server runs, e.g. `2.16.2`. Version-dependent rules follow it (function overloading since 2.12, `->` return types and named arguments since 2.14), and built-in functions come from the closest bundled version (2.14.3, 2.15.4, 2.16.2 or 2.17.1). Empty means the newest bundled version."
+        },
+        "skout.addonVersions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "markdownDescription": "The addon versions your server runs, e.g. `{ \"SkBee\": \"3.11.0\" }`. **Skout: Check Upgrade** uses them to label what you upgrade from."
         },
         "skout.knownFunctions": {
           "type": "array",
@@ -205,6 +213,17 @@
         "command": "skout.reloadSyntaxDumps",
         "title": "Reload Syntax Dumps",
         "category": "Skout"
+      },
+      {
+        "command": "skout.checkUpgrade",
+        "title": "Check Upgrade…",
+        "category": "Skout",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "skout.clearUpgradeResults",
+        "title": "Clear Upgrade Results",
+        "category": "Skout"
       }
     ],
     "menus": {
@@ -229,7 +248,8 @@
     "package": "node scripts/build.mjs --production && vsce package --no-dependencies",
     "vscode:prepublish": "node scripts/build.mjs --production",
     "images": "node scripts/render-images.mjs",
-    "dumps": "node scripts/build-dumps.mjs"
+    "dumps": "node scripts/build-dumps.mjs",
+    "sample-report": "node scripts/sample-report.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",

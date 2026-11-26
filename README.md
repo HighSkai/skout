@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/HighSkai/skout?color=22c55e"></a>
 </p>
 
-**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Completion and docs come from the syntax of *your* server and addons. An upgrade checker is next.
+**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Completion and docs come from the syntax of *your* server and addons, and before you upgrade Skript or an addon, Skout lists every line the new version breaks.
 
 Most Skript extensions stop at syntax highlighting. Skout reads your scripts the way Skript does: its indentation and comment rules are ported from Skript's own config parser, so an error in the editor is an error on your server.
 
@@ -72,6 +72,22 @@ Every `.sk` file in the workspace is indexed in the background, open or not.
 - **Typos, with a quick fix.** `sned "hi" to player` gets "Did you mean 'send'?" and a one-click fix. The check only speaks up when changing one word makes the line valid. Lines it cannot place are left alone, so addon syntax Skout does not know about is never flagged. Set `skout.unrecognizedSyntax` to `all` to see every line that matches nothing, with the closest patterns.
 - **Your server's syntax, not a guess.** Skout ships Skript's own syntax for 2.14 to 2.17. Add your addons, or your exact Skript build, with `skout.syntaxDumps`, or download them with **Skout: Download Syntax Dump**; see [Use your server's syntax](#use-your-servers-syntax).
 
+### Upgrade checker (0.4)
+
+Run **Skout: Check Upgrade…** and pick what you are upgrading to: a newer Skript (2.14.3 to 2.17.1 are bundled; any other version is downloaded on request), or a newer syntax dump of an addon. Skout checks every script against both versions and puts the results in the Problems panel and in a Markdown report (`.skout/reports/`). Each finding names the file and line and, where the data allows, what to write instead. It finds:
+
+- **Lines that will not load any more.** The line matched a pattern in your version and matches none in the new one, for example `command "…"` once 2.17 made `execute` required. When the same entry still exists, the report shows how it is written now.
+- **Syntax that quietly changes meaning.** The exact pattern a line relied on is gone, and only a more general one still fits, so Skript would misread the line.
+- **Removed expressions inside a line,** such as 2.17's `last usage date`.
+- **Functions that will fail to register,** the classic upgrade surprise:
+  - a parameter or return type the new version does not have (`structure type` in 2.16, with the suggestion "It is now called 'tree type'");
+  - a new built-in function with the same name and argument types as yours (`entity(uuid)` in 2.16).
+- **Calls to built-in functions that no longer exist.**
+- **Deprecated syntax.**
+- **Behaviour changes from Skript's release notes,** linked: `permission message` is ignored from 2.17, `the executor` means something new in 2.17, and the chat-format placeholders are deprecated in 2.16.
+
+Here is [a real report](docs/sample-upgrade-report.md) for a small script going from Skript 2.15.4 to 2.17.1.
+
 ### Editor basics
 
 - **Outline.** Events, commands, functions and `options:` entries appear in the Outline view and the breadcrumbs.
@@ -87,19 +103,19 @@ Every `.sk` file in the workspace is indexed in the background, open or not.
 | **M1: Foundation** | Parser, highlighting, structural diagnostics | ✅ Released in 0.1 |
 | **M2: Project awareness** | Workspace index; go to definition, references and hover; cross-file function, option and variable checks; Variables view; rename with preview | ✅ Released in 0.2 |
 | **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from syntax dumps of *your* server and addons; conservative "unrecognized syntax" hints with quick fixes | ✅ Released in 0.3 |
-| **M4: Upgrade checker** | "Skout: Check upgrade to version X" compares two syntax dumps and reports every line in your project that the new Skript or addon version removes, deprecates or changes | Next |
+| **M4: Upgrade checker** | "Skout: Check Upgrade…" compares two versions' syntax and reports every line in your project that the new Skript or addon version breaks, deprecates or changes | ✅ Released in 0.4 |
 
 <!-- GIF: go-to-definition.gif (M2). Record F12 on a function call jumping to another file, then Shift+F12. -->
 <!-- GIF: rename-namespace.gif (M2). Record F2 on {objective::…}, the Refactor Preview, and applying it. -->
 <!-- GIF: completion.gif (M3). Record typing `se` in a trigger, picking `send %objects%`, and tabbing through the slots. -->
-<!-- GIF: upgrade-report.gif (M4) -->
+<!-- GIF: upgrade-report.gif (M4). Record Skout: Check Upgrade…, picking Skript 2.17.1, and the report opening next to the Problems panel. -->
 
 ## Install
 
 **From a release (VSIX).** Download `skout-<version>.vsix` from the [latest release](https://github.com/HighSkai/skout/releases/latest), then either run **Extensions: Install from VSIX…** from the Command Palette, or:
 
 ```sh
-code --install-extension skout-0.3.0.vsix
+code --install-extension skout-0.4.0.vsix
 ```
 
 **From the Marketplace.** Not published yet. The extension id will be `highskai.skout`.
@@ -125,6 +141,7 @@ Every diagnostic category can be switched off.
 | Setting | Default | What it controls |
 |---|---|---|
 | `skout.skriptVersion` | `""` | Your server's Skript version, e.g. `2.16.2`. Version-dependent rules follow it. Empty means the newest bundled version (2.17.1) |
+| `skout.addonVersions` | `{}` | The addon versions your server runs, e.g. `{ "SkBee": "3.11.0" }`, used to label upgrade reports |
 | `skout.knownFunctions` | `[]` | Functions provided by addons whose syntax is not loaded, so calls to them are not reported as undefined |
 | `skout.syntaxDumps` | `[]` | Syntax dump files or folders (Skript's `docs.json`, SkriptHub Docs Tool output, downloaded dumps), absolute or relative to the workspace |
 | `skout.unrecognizedSyntax` | `"typos"` | `typos`: report a line only when one changed word makes it valid. `all`: also report every unmatched line, as information. `off` |
@@ -162,6 +179,7 @@ Every diagnostic category can be switched off.
 | `unknown-option` | Error | `undefined option {@name}`, as Skript reports it |
 | `unset-variable` | Warning | The variable is read but never set where it could be |
 | `unrecognized-syntax` | Warning (Information in `all` mode) | The line matches no known syntax; with a quick fix when one word is misspelled |
+| `upgrade-*` | Varies | Findings of **Skout: Check Upgrade…**, kept apart from the live diagnostics; **Skout: Clear Upgrade Results** removes them |
 
 ### How Skout knows what Skript accepts
 
@@ -173,6 +191,7 @@ Skout does not guess at Skript's rules; it ports them from Skript's source:
 - Function headers, parameters and calls follow `StructFunction`, `FunctionParser` and `FunctionArgumentParser`, including the version differences: overloading since 2.12, `->` return types and named arguments since 2.14.
 - Variables are case-insensitive, as in Skript's default config. A dynamic part such as `%player%` may hold any value, so Skout only warns when no write could possibly match.
 - Argument counts are not checked for built-in functions, because Skript's documentation lists one signature per function and leaves out overloads (it documents `vector(n)` but not `vector(x, y, z)`).
+- The upgrade checker compares lines, not documentation ids: Skript renamed most ids between 2.13 and 2.16 (`EvtJoin` became `join`), so comparing ids would report hundreds of removals that are not. It must report nothing on Skript's own 2.17.1 tests when they are checked as an upgrade from 2.16.2.
 - Syntax patterns are matched with a port of Skript's own pattern compiler and matchers (`PatternCompiler`, `LiteralPatternElement`, `TypePatternElement`). Skout cannot parse the expression inside a `%slot%`, so any text fits a slot. That makes matching lenient by design: a line that matches nothing is genuinely unknown syntax.
 
 Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions, and no typo warnings at all.
