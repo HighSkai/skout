@@ -141,4 +141,114 @@ writeFileSync(join(images, 'social-preview.png'), png(card(1280, 640, 'github.co
   writeFileSync(join(images, 'diagnostics.png'), png(svg, W));
 }
 
-console.log('Rendered icon.png, banner.png, social-preview.png and diagnostics.png in images/');
+// --- project: the Variables view and a hover, from the server's real output on test-workspace ---
+{
+  const outfile = join(root, 'node_modules', '.cache', 'skout-render', 'project.cjs');
+  esbuild.buildSync({
+    stdin: {
+      contents: [
+        "export { WorkspaceIndex } from './server/src/index/workspace';",
+        "export { variablesTree } from './server/src/features/variablesTree';",
+        "export { hover, targetAt } from './server/src/features/navigation';",
+        "export { SyntaxCatalog } from './server/src/syntax/catalog';",
+      ].join('\n'),
+      resolveDir: root,
+      loader: 'ts',
+    },
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile,
+    logLevel: 'silent',
+  });
+  const { WorkspaceIndex, variablesTree, hover, targetAt, SyntaxCatalog } = require(outfile);
+  const catalog = SyntaxCatalog.fromDirectory(join(root, 'dumps'));
+  const syntax = catalog.forVersion('2.16.2');
+  const index = new WorkspaceIndex(syntax.version);
+  const scripts = join(root, 'test-workspace', 'scripts');
+  for (const name of ['admin.sk', 'quests.sk', 'shop.sk']) index.update(`file:///${name}`, readFileSync(join(scripts, name), 'utf8'));
+
+  // Hover on the completeQuest() call in admin.sk.
+  const admin = index.get('file:///admin.sk');
+  const callLine = admin.script.lines.find((l) => l.text.includes('completeQuest('));
+  const markdown = hover(index, admin, targetAt(admin, callLine.index, callLine.text.indexOf('completeQuest(') + 2), syntax).contents.value;
+
+  // The tree, with the shop and quest namespaces open.
+  const rows = [];
+  const walk = (node, depth, open) => {
+    rows.push({ depth, label: node.label, detail: `${node.sets} set · ${node.reads} read`, kind: node.kind, unset: node.unset, expandable: !!(node.children?.length || node.locations?.length), open });
+    if (!open) return;
+    for (const child of node.children ?? []) walk(child, depth + 1, depth < 1 || child.label === 'items');
+    if (node.label === 'items' && node.locations) {
+      for (const l of [...node.locations].sort((a, b) => b.write - a.write).slice(0, 3)) {
+        rows.push({ depth: depth + 1, label: `${l.uri.slice(8)}:${l.line + 1}`, detail: l.write ? 'set' : 'read', kind: l.write ? 'set' : 'read' });
+      }
+    }
+  };
+  for (const node of variablesTree(index)) walk(node, 0, node.label !== 'Local variables');
+
+  const W = 1280;
+  const rowH = 26;
+  const treeW = 520;
+  let H = Math.max(56 + rows.length * rowH + 40, 420);
+  const ICON = { namespace: '#c586c0', variable: '#75beff', group: '#8b949e', file: '#8b949e', structure: '#d7ba7d', set: '#89d185', read: '#8b949e' };
+  let tree = `<rect x="0" y="36" width="${treeW}" height="TREE_HEIGHT" fill="#181818"/>`;
+  tree += `<text x="20" y="62" font-family="Segoe UI" font-weight="600" font-size="12.5" letter-spacing="1" fill="#cccccc">SKOUT: VARIABLES</text>`;
+  rows.forEach((r, i) => {
+    const y = 80 + i * rowH;
+    const x = 24 + r.depth * 18;
+    if (r.expandable) tree += `<path d="M${x} ${y + 9} l4 4 l4 -4" transform="${r.open ? '' : `rotate(-90 ${x + 4} ${y + 11})`}" fill="none" stroke="#c5c5c5" stroke-width="1.4"/>`;
+    const color = r.unset ? '#cca700' : ICON[r.kind] ?? '#8b949e';
+    tree += `<rect x="${x + 14}" y="${y + 5}" width="11" height="11" rx="2" fill="none" stroke="${color}" stroke-width="1.6"/>`;
+    tree += `<text x="${x + 32}" y="${y + 15}" font-family="Segoe UI" font-size="14" fill="#e6e6e6">${esc(r.label)}<tspan dx="10" fill="#8b949e" font-size="13">${esc(r.detail)}</tspan></text>`;
+  });
+
+  // A second hover: the namespace part of a variable in shop.sk.
+  const shop = index.get('file:///shop.sk');
+  const loopLine = shop.script.lines.find((l) => l.text.includes('loop {shop::items::*}'));
+  const variableMarkdown = hover(index, shop, targetAt(shop, loopLine.index, loopLine.text.indexOf('{shop') + 2), syntax).contents.value;
+
+  // Hover cards: code block, text, links shown as their text.
+  const hx = treeW + 60;
+  const cardW = W - hx - 40;
+  const renderCard = (md, top, caption, code) => {
+    const lines = [];
+    let inCode = false;
+    for (const raw of md.split('\n')) {
+      if (raw.startsWith('```')) {
+        inCode = !inCode;
+        continue;
+      }
+      if (raw.trim() === '' && lines.at(-1)?.text.trim() === '') continue;
+      lines.push({ code: inCode, text: raw.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').replace(/\*\*/g, '').replace(/`/g, '') });
+    }
+    const height = 30 + lines.length * 24 + 6;
+    let out = `<text x="${hx}" y="${top - 40}" font-family="Segoe UI" font-size="12.5" fill="#8b949e">${esc(caption)}</text>`;
+    out += `<text x="${hx}" y="${top - 18}" font-family="Consolas" font-size="15" fill="#d4d4d4">${esc(code)}</text>`;
+    out += `<rect x="${hx}" y="${top}" width="${cardW}" height="${height}" rx="6" fill="#252526" stroke="#454545"/>`;
+    lines.forEach((l, i) => {
+      const y = top + 32 + i * 24;
+      out += l.code
+        ? `<text x="${hx + 18}" y="${y}" font-family="Consolas" font-size="15" fill="#dcdcaa">${esc(l.text)}</text>`
+        : `<text x="${hx + 18}" y="${y}" font-family="Segoe UI" font-size="14" fill="#cccccc">${esc(l.text)}</text>`;
+    });
+    return { svg: out, height };
+  };
+  const first = renderCard(markdown, 96, 'admin.sk, hovering a function call', 'completeQuest(player, {_quest})');
+  const second = renderCard(variableMarkdown, 96 + first.height + 84, 'shop.sk, hovering the namespace of a variable', 'loop {shop::items::*}:');
+  const card = first.svg + second.svg;
+  H = Math.max(H, 96 + first.height + 84 + second.height + 56);
+  tree = tree.replace("TREE_HEIGHT", String(H - 36));
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <rect width="${W}" height="${H}" rx="10" fill="#1f1f1f"/>
+  <rect x="0" y="0" width="${W}" height="36" fill="#181818"/>
+  <circle cx="22" cy="18" r="6" fill="#ff5f57"/><circle cx="42" cy="18" r="6" fill="#febc2e"/><circle cx="62" cy="18" r="6" fill="#28c840"/>
+  <text x="${W / 2}" y="23" font-family="Segoe UI" font-size="13" fill="#9d9d9d" text-anchor="middle">test-workspace</text>
+  ${tree}${card}
+  <text x="${W - 24}" y="${H - 16}" font-family="Segoe UI" font-size="12.5" fill="#5a6b62" text-anchor="end">Rendered from Skout's real output on test-workspace/scripts</text>
+</svg>`;
+  writeFileSync(join(images, 'project.png'), png(svg, W));
+}
+
+console.log('Rendered icon.png, banner.png, social-preview.png, diagnostics.png and project.png in images/');

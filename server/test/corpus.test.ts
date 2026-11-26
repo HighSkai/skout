@@ -6,7 +6,11 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { projectIssues } from '../src/features/project';
+import { WorkspaceIndex } from '../src/index/workspace';
 import { parseScript } from '../src/parser/parser';
+import { defaultSettings } from '../src/settings';
+import { catalog } from './project';
 
 const ROOT = join(__dirname, '..', '..', '.corpus', 'Skript');
 
@@ -46,4 +50,36 @@ describe.skipIf(!existsSync(ROOT))('Skript’s own scripts', () => {
     }
     expect(problems).toEqual([]);
   });
+
+  /**
+   * The cross-file checks over Skript's test suite. The tests deliberately use
+   * unset variables, so `unset-variable` is not asserted; everything else must
+   * be explained by test-only code.
+   */
+  it('produce no cross-file errors outside deliberate test failures', () => {
+    const syntax = catalog.forVersion('2.17.1');
+    const index = new WorkspaceIndex(syntax.version);
+    for (const file of scripts(join(ROOT, 'src', 'test', 'skript', 'tests'))) {
+      index.update(`file:///${relative(ROOT, file).replaceAll('\\', '/')}`, readFileSync(file, 'utf8'));
+    }
+    const issues = projectIssues({ index, catalog, syntax, version: syntax.version, settings: defaultSettings });
+    const problems: string[] = [];
+    for (const [uri, list] of issues) {
+      for (const issue of list) {
+        if (issue.code === 'unset-variable') continue;
+        const name = uri.slice('file:///'.length);
+        const call = issue.message.match(/^Function '(\w+)'/)?.[1];
+        if (issue.code === 'undefined-function' && call && TEST_ONLY_FUNCTIONS.has(call)) continue;
+        if (EXPECTED_FAILURES.has(`${name}:${issue.line + 1}`)) continue;
+        problems.push(`${name}:${issue.line + 1} ${issue.code} ${issue.message}`);
+      }
+    }
+    expect(problems).toEqual([]);
+  });
 });
+
+/** Registered by Skript's TestFunctions only when its test runner is active. */
+const TEST_ONLY_FUNCTIONS = new Set(['case_equals', 'file_separator']);
+
+// `parse:` blocks that expect "The function argument_test(...) does not exist".
+for (const line of [67, 75, 87]) EXPECTED_FAILURES.add(`src/test/skript/tests/syntaxes/structures/StructFunction.sk:${line}`);

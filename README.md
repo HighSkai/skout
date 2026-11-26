@@ -10,7 +10,7 @@
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/github/license/HighSkai/skout?color=22c55e"></a>
 </p>
 
-**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them. Later milestones add addon-aware completion, project navigation and an upgrade checker.
+**Skout** is a language server and VS Code extension for [Skript](https://github.com/SkriptLang/Skript), the scripting language Minecraft servers use to add features without writing Java. It catches the mistakes `/sk reload` would reject while you are still typing them, and it understands your whole project: functions, options and variables across every script. Later milestones add addon-aware completion and an upgrade checker.
 
 Most Skript extensions stop at syntax highlighting. Skout reads your scripts the way Skript does: its indentation and comment rules are ported from Skript's own config parser, so an error in the editor is an error on your server.
 
@@ -22,18 +22,43 @@ Most Skript extensions stop at syntax highlighting. Skout reads your scripts the
 
 ## Features
 
-### Available now (0.1)
+### Errors before `/sk reload` (0.1)
 
-- **Errors before `/sk reload`.** Skout reports, as you type:
+- **Structure.** Skout reports, as you type:
   - indentation Skript rejects: tabs mixed with spaces, a line deeper than its section allows, a partial indent;
   - a missing `:` on a line that has an indented block under it;
   - unclosed strings, an unescaped `%` inside a string, and unclosed or unmatched `{}`, `()` and `[]`;
   - empty sections;
   - unclosed `###` block comments, and a `#` that silently turns the rest of a value into a comment (`<#ff0000>` in `options:` is the classic).
+
+### Project awareness (0.2)
+
+<p align="center">
+  <img src="images/project.png" alt="The Skout Variables view grouping variables by namespace, next to hover cards for a function call and a variable" width="100%">
+</p>
+
+Every `.sk` file in the workspace is indexed in the background, open or not.
+
+- **Functions across files.** Go to definition, find all references and hover (signature, the comment above the function, how often it is called) for your functions and for Skript's built-in ones.
+- **Cross-file checks:**
+  - calls to functions that do not exist, including built-ins newer than your Skript version (`entity()` needs 2.16);
+  - calls with the wrong number of arguments, counting optional parameters;
+  - duplicate functions across files, following Skript's rules: two functions with the same name are fine since 2.12 if their argument types differ;
+  - function headers Skript cannot read;
+  - `{@options}` that the script never defines;
+  - variables read somewhere but never set, with a "did you mean" for typos (`{_totl}` → `{_total}`). Locals are checked per trigger or function. Named command arguments and function parameters count as set.
+- **Variables view.** **Skout: Variables** in the Explorer lists global variables grouped by namespace (`{quest::%uuid%::active::*}` sits under quest › %…% › active) and local variables by file and trigger, each with every place it is set and read. Hovering a variable shows the same.
+- **Rename with preview.** Rename a function (definition and every call, in every file) or part of a variable name. Renaming `objective` in `{objective::%player%::done}` renames the whole `{objective::…}` namespace. Changes open in the Refactor Preview first.
+- **Workspace symbols.** <kbd>Ctrl</kbd>+<kbd>T</kbd> finds functions, commands and options in any script.
+- **Version-aware.** Set `skout.skriptVersion` to your server's version. Skout bundles the built-in syntax of Skript 2.14.3, 2.15.4, 2.16.2 and 2.17.1.
+- **Respects how Skript loads scripts.** Scripts and folders starting with `-` are disabled in Skript, so their functions do not count; Skript's own `config.sk` is never read as a script.
+
+### Editor basics
+
 - **Outline.** Events, commands, functions and `options:` entries appear in the Outline view and the breadcrumbs.
 - **Folding.** Folding follows the real section structure and `###` block comments.
 - **Highlighting.** A small TextMate grammar covers strings with `%expressions%`, variables, `{@options}`, colour codes, comments and structure headers.
-- **Fast.** A 2,000-line file is fully reparsed in about 2 ms, so diagnostics keep up with every keystroke.
+- **Fast.** A keystroke in a 2,000-line file is re-parsed and re-indexed in about 9 ms; the cross-file checks over a 100,000-line project take about 45 ms and run in the background.
 - **Works in other editors.** The language server has no VS Code dependency; see [Other editors](#other-editors).
 
 ### Roadmap
@@ -41,11 +66,12 @@ Most Skript extensions stop at syntax highlighting. Skout reads your scripts the
 | Milestone | What it adds | Status |
 |---|---|---|
 | **M1: Foundation** | Parser, highlighting, structural diagnostics | ✅ Released in 0.1 |
-| **M2: Project awareness** | Workspace index; go to definition, references and hover for functions; undefined function and argument count checks; a Variables view grouped by namespace; rename for functions and variable namespaces | Next |
-| **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from a JSON syntax dump of *your* server and addons; conservative "unrecognized syntax" hints | Planned |
+| **M2: Project awareness** | Workspace index; go to definition, references and hover; cross-file function, option and variable checks; Variables view; rename with preview | ✅ Released in 0.2 |
+| **M3: Syntax intelligence** | Completion and hover docs for events, effects, expressions and conditions, loaded from a JSON syntax dump of *your* server and addons; conservative "unrecognized syntax" hints | Next |
 | **M4: Upgrade checker** | "Skout: Check upgrade to version X" compares two syntax dumps and reports every line in your project that the new Skript or addon version removes, deprecates or changes | Planned |
 
-<!-- GIF: go-to-definition.gif (M2) -->
+<!-- GIF: go-to-definition.gif (M2). Record F12 on a function call jumping to another file, then Shift+F12. -->
+<!-- GIF: rename-namespace.gif (M2). Record F2 on {objective::…}, the Refactor Preview, and applying it. -->
 <!-- GIF: completion.gif (M3) -->
 <!-- GIF: upgrade-report.gif (M4) -->
 
@@ -54,7 +80,7 @@ Most Skript extensions stop at syntax highlighting. Skout reads your scripts the
 **From a release (VSIX).** Download `skout-<version>.vsix` from the [latest release](https://github.com/HighSkai/skout/releases/latest), then either run **Extensions: Install from VSIX…** from the Command Palette, or:
 
 ```sh
-code --install-extension skout-0.1.0.vsix
+code --install-extension skout-0.2.0.vsix
 ```
 
 **From the Marketplace.** Not published yet. The extension id will be `highskai.skout`.
@@ -69,11 +95,19 @@ Every diagnostic category can be switched off.
 
 | Setting | Default | What it controls |
 |---|---|---|
+| `skout.skriptVersion` | `""` | Your server's Skript version, e.g. `2.16.2`. Version-dependent rules follow it. Empty means the newest bundled version (2.17.1) |
+| `skout.knownFunctions` | `[]` | Functions provided by addons (for example skript-particle), so calls to them are not reported as undefined |
 | `skout.diagnostics.indentation` | `true` | Mixed tabs and spaces, wrong indentation depth, and (as information) a file mixing indent styles between structures |
 | `skout.diagnostics.missingColon` | `true` | A line followed by an indented block that does not end with `:` |
 | `skout.diagnostics.unclosed` | `true` | Unclosed quotes, `%` in strings, `{}`, `()` and `[]` |
 | `skout.diagnostics.emptySection` | `true` | Sections with nothing indented under them |
 | `skout.diagnostics.comments` | `true` | Unclosed `###` block comments and accidental `#` comments |
+| `skout.diagnostics.undefinedFunction` | `true` | Calls to functions that are neither in the workspace nor built into Skript |
+| `skout.diagnostics.argumentCount` | `true` | Calls to your functions with too many or too few arguments |
+| `skout.diagnostics.duplicateFunction` | `true` | Functions defined twice with the same argument types, or clashing with a built-in |
+| `skout.diagnostics.functionSignature` | `true` | Function headers Skript cannot read |
+| `skout.diagnostics.unknownOption` | `true` | `{@options}` the script does not define |
+| `skout.diagnostics.unsetVariable` | `true` | Variables read but never set |
 | `skout.trace.server` | `"off"` | Logs the messages between VS Code and the server to the **Skout** output channel |
 
 ## Diagnostics reference
@@ -90,6 +124,12 @@ Every diagnostic category can be switched off.
 | `empty-section` | Warning | Nothing is indented under a line ending in `:` |
 | `unclosed-block-comment` | Error | A `###` block comment is never closed |
 | `accidental-comment` | Warning | A `#` right after other text starts a comment; write `##` for a literal `#` |
+| `undefined-function` | Warning (Error for a built-in newer than your version) | No function with this name in the workspace or in Skript |
+| `argument-count` | Error | No definition of the function takes that many arguments |
+| `duplicate-function` | Error | Another function has the same name and argument types (same name only, before 2.12) |
+| `invalid-function` | Error | Skript cannot read the function header; the message is Skript's own |
+| `unknown-option` | Error | `undefined option {@name}`, as Skript reports it |
+| `unset-variable` | Warning | The variable is read but never set where it could be |
 
 ### How Skout knows what Skript accepts
 
@@ -98,8 +138,11 @@ Skout does not guess at Skript's rules; it ports them from Skript's source:
 - Comments follow `Node#splitLine`: `###` alone on a line toggles a block comment, `##` outside a string is a literal `#`, and `#` inside a string never starts a comment.
 - Indentation follows `SectionNode#load_i`: the first indented line of each top-level structure sets that structure's indent unit, so one event may use tabs and the next four spaces.
 - `{@options}` are substituted as plain text before Skript parses a line, so Skout trusts option values that contain brackets or quotes.
+- Function headers, parameters and calls follow `StructFunction`, `FunctionParser` and `FunctionArgumentParser`, including the version differences: overloading since 2.12, `->` return types and named arguments since 2.14.
+- Variables are case-insensitive, as in Skript's default config. A dynamic part such as `%player%` may hold any value, so Skout only warns when no write could possibly match.
+- Argument counts are not checked for built-in functions, because Skript's documentation lists one signature per function and leaves out overloads (it documents `vector(n)` but not `vector(x, y, z)`).
 
-Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail.
+Every change is checked against all 587 scripts in Skript's own repository: Skout must report no errors on any of them, except the lines Skript's tests expect to fail and calls to Skript's test-only functions.
 
 ## Other editors
 
@@ -127,7 +170,8 @@ Bug reports, especially false positives, are very welcome. A false positive is a
 ## Acknowledgements
 
 - [SkriptLang/Skript](https://github.com/SkriptLang/Skript), whose config parser defines the rules Skout enforces, and whose test scripts are Skout's stress-test corpus.
-- [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool) and Skript's JSON docs generator, which will feed M3's syntax data.
+- [SkriptLang/skript-docs](https://github.com/SkriptLang/skript-docs): the bundled syntax in `dumps/` is normalized from Skript's published `docs.json` (GPL-3.0).
+- [SkriptHub Docs Tool](https://github.com/SkriptHub/SkriptHubDocsTool), which will feed addon syntax in M3.
 - The existing Skript editor tools ([IntelliSkript](https://github.com/JohnHeikens/IntelliSkript), [Sk-VSC](https://github.com/AyhamAl-Ali/Sk-VSC), [r4tsk](https://github.com/RATR2/r4tsk), [SkriptZed](https://github.com/DaisyCatTs/SkriptZed)) for showing what Skript developers want from an editor.
 
 ## License

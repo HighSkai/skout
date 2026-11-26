@@ -1,0 +1,13 @@
+# Admin commands that fill the shop and quest data the other scripts read.
+command /setprice <item: item type> <price: number>:
+	permission: shop.admin
+	trigger:
+		add {_item} to {shop::items::*}
+		set {shop::price::%{_item}%} to {_price}
+		send "Price set." to player
+
+command /setgoal <quest: text> <goal: number>:
+	permission: quests.admin
+	trigger:
+		set {quest::goals::%{_quest}%} to {_goal}
+		completeQuest(player, {_quest})

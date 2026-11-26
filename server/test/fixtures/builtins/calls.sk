@@ -1,0 +1,5 @@
+on join:
+	set {_id} to uuid of player
+	set {_e} to entity({_id})
+	set {_x} to floor(1.5)
+	send "%rgb(1, 2, 3)%" to player

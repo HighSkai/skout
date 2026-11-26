@@ -1,0 +1,20 @@
+# Formats a number of coins for chat.
+function formatCoins(n: number) :: text:
+	return "%{_n}% coins"
+
+function giveCoins(p: player, amount: number = 1):
+	add {_amount} to {coins::%uuid of {_p}%}
+	send "&aYou got %formatCoins({_amount})%" to {_p}
+
+# Overloads: the same name with different argument types (Skript 2.12+).
+function describe(n: number) :: text:
+	return "number %{_n}%"
+
+function describe(t: text) :: text:
+	return "text %{_t}%"
+
+local function helper() :: text:
+	return "util helper"
+
+function total(values: numbers) :: number:
+	return sum({_values::*})

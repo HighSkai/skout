@@ -24,7 +24,18 @@ export interface SkNode {
   lastLine: number;
 }
 
-export type IssueCategory = 'indentation' | 'missingColon' | 'unclosed' | 'emptySection' | 'comments';
+export type IssueCategory =
+  | 'indentation'
+  | 'missingColon'
+  | 'unclosed'
+  | 'emptySection'
+  | 'comments'
+  | 'undefinedFunction'
+  | 'argumentCount'
+  | 'duplicateFunction'
+  | 'functionSignature'
+  | 'unknownOption'
+  | 'unsetVariable';
 
 export type IssueCode =
   | 'indent-mixed'
@@ -37,9 +48,23 @@ export type IssueCode =
   | 'unmatched-bracket'
   | 'empty-section'
   | 'unclosed-block-comment'
-  | 'accidental-comment';
+  | 'accidental-comment'
+  | 'undefined-function'
+  | 'argument-count'
+  | 'duplicate-function'
+  | 'invalid-function'
+  | 'unknown-option'
+  | 'unset-variable';
 
 export type Severity = 'error' | 'warning' | 'information' | 'hint';
+
+export interface RelatedLocation {
+  readonly uri: string;
+  readonly line: number;
+  readonly start: number;
+  readonly end: number;
+  readonly message: string;
+}
 
 export interface Issue {
   readonly code: IssueCode;
@@ -49,6 +74,7 @@ export interface Issue {
   readonly line: number;
   readonly start: number;
   readonly end: number;
+  readonly related?: readonly RelatedLocation[];
 }
 
 export interface OptionEntry {

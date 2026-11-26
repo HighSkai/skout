@@ -1,8 +1,8 @@
 {
   "name": "skout",
   "displayName": "Skout",
-  "description": "Version-aware Skript language server: errors as you type, addon-aware completion, project navigation and an upgrade checker.",
-  "version": "0.1.0",
+  "description": "Skript language server: errors as you type, go to definition, find references, rename and a variables view across your whole project, with addon-aware completion and an upgrade checker on the way.",
+  "version": "0.2.0",
   "publisher": "highskai",
   "license": "GPL-3.0-only",
   "icon": "images/icon.png",
@@ -67,6 +67,21 @@
     "configuration": {
       "title": "Skout",
       "properties": {
+        "skout.skriptVersion": {
+          "type": "string",
+          "default": "",
+          "pattern": "^$|^d+.d+(.d+)?(-[w.]+)?$",
+          "patternErrorMessage": "A Skript version such as 2.16.2, or empty for the newest bundled version.",
+          "markdownDescription": "The Skript version your server runs, e.g. `2.16.2`. Version-dependent rules follow it (function overloading since 2.12, `->` return types and named arguments since 2.14), and built-in functions come from the closest bundled version (2.14.3, 2.15.4, 2.16.2 or 2.17.1). Empty means the newest bundled version."
+        },
+        "skout.knownFunctions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Functions provided by addons (for example skript-particle), so calls to them are not reported as undefined. Addon syntax dumps will replace this in a later version."
+        },
         "skout.diagnostics.indentation": {
           "type": "boolean",
           "default": true,
@@ -92,6 +107,36 @@
           "default": true,
           "markdownDescription": "Report unclosed `###` block comments, and a `#` that silently starts a comment in the middle of a value (for example `<#ff0000>` in `options:`)."
         },
+        "skout.diagnostics.undefinedFunction": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report calls to functions that are not defined in the workspace and are not built into Skript."
+        },
+        "skout.diagnostics.argumentCount": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report calls to your functions with too many or too few arguments."
+        },
+        "skout.diagnostics.duplicateFunction": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report functions defined twice with the same argument types (or the same name, before Skript 2.12), including clashes with built-in functions."
+        },
+        "skout.diagnostics.functionSignature": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report function headers Skript cannot read, such as an invalid parameter definition."
+        },
+        "skout.diagnostics.unknownOption": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report `{@option}` references with no entry in the script's `options:`."
+        },
+        "skout.diagnostics.unsetVariable": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Report variables that are read but never set anywhere they could be: in the workspace for globals, in the same trigger or function for locals."
+        },
         "skout.trace.server": {
           "type": "string",
           "enum": [
@@ -103,6 +148,39 @@
           "description": "Log the communication between VS Code and the Skout language server."
         }
       }
+    },
+    "views": {
+      "explorer": [
+        {
+          "id": "skout.variables",
+          "name": "Skout: Variables",
+          "contextualTitle": "Skout",
+          "icon": "images/file-icon.svg"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "skout.variables",
+        "contents": "No Skript variables yet. Open a folder that contains .sk files."
+      }
+    ],
+    "commands": [
+      {
+        "command": "skout.variables.refresh",
+        "title": "Refresh Variables",
+        "category": "Skout",
+        "icon": "$(refresh)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "skout.variables.refresh",
+          "when": "view == skout.variables",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {
@@ -116,7 +194,8 @@
     "bench": "vitest bench --run",
     "package": "node scripts/build.mjs --production && vsce package --no-dependencies",
     "vscode:prepublish": "node scripts/build.mjs --production",
-    "images": "node scripts/render-images.mjs"
+    "images": "node scripts/render-images.mjs",
+    "dumps": "node scripts/build-dumps.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
@@ -135,6 +214,7 @@
   "dependencies": {
     "vscode-languageclient": "^11.0.1",
     "vscode-languageserver": "^11.0.1",
-    "vscode-languageserver-textdocument": "^1.0.16"
+    "vscode-languageserver-textdocument": "^1.0.16",
+    "vscode-uri": "^3.2.0"
   }
 }

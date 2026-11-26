@@ -1,0 +1,26 @@
+options:
+	reward: 25
+
+variables:
+	{quest::settings::max-active} = 3
+
+on join:
+	set {quest::%uuid of player%::active::*} to "tutorial"
+	giveCoins(player, {@reward})
+	giveCoins(player)
+	send formatCoins({coins::%uuid of player%}) to player
+	send "%describe(5)% and %describe("five")%" to player
+	send "%total(1, 2, 3)%" to player
+	if size of {quest::%uuid of player%::active::*} >= {quest::settings::max-active}:
+		send "Too many quests" to player
+
+command /quests <target: player>:
+	trigger:
+		loop {quest::%uuid of {_target}%::active::*}:
+			send "Active: %loop-value%" to player
+		send helper() to player
+		for each {_quest} in {quest::%uuid of {_target}%::active::*}:
+			send {_quest} to player
+
+local function helper() :: text:
+	return "quests helper"

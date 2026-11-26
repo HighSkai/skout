@@ -1,0 +1,6 @@
+# Skript skips folders and files starting with '-'; this one must not clash with util.sk.
+function formatCoins(n: number) :: text:
+	return "old"
+
+function onlyHere() :: text:
+	return "disabled"

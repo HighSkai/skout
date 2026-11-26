@@ -1,0 +1,20 @@
+options:
+	prefix: &8[&6Quests&8]
+
+on join:
+	giveCoins(player, 5, 10)
+	formatCoin(5)
+	send onlyHere() to player
+	send "{@prefx} hi" to player
+	send "%{quest::%uuid of player%::actve::*}%" to player
+	set {_total} to 0
+	send "%{_totl}%" to player
+
+function formatCoins(amount: number) :: text:
+	return "duplicate"
+
+function bad name(x: number):
+	stop
+
+function broken(x number):
+	stop

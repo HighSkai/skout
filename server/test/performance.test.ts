@@ -1,39 +1,62 @@
 import { performance } from 'node:perf_hooks';
 import { describe, expect, it } from 'vitest';
 import { toDiagnostics } from '../src/features/diagnostics';
-import { parseScript } from '../src/parser/parser';
+import { projectIssues } from '../src/features/project';
+import { WorkspaceIndex } from '../src/index/workspace';
 import { defaultSettings } from '../src/settings';
 import { fixture } from './helpers';
+import { catalog } from './project';
 
 /** A realistic file of at least `lines` lines, built from the fixtures with renamed functions. */
-export function bigScript(lines: number): string {
+export function bigScript(lines: number, prefix = ''): string {
   const parts = ['valid/shop-gui.sk', 'valid/stats.sk'].map(fixture);
   const out: string[] = [];
   let copy = 0;
   while (out.length < lines) {
-    for (const part of parts) out.push(...part.replace(/openShop/g, `openShop${copy}`).split('\n'));
+    for (const part of parts) out.push(...part.replace(/openShop/g, `openShop${prefix}${copy}`).split('\n'));
     copy++;
   }
   return out.join('\n');
 }
 
+function percentile(times: number[], p: number): number {
+  const sorted = [...times].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+}
+
 describe('performance', () => {
-  it('parses and diagnoses a 2,000-line file well inside the 100 ms per-keystroke budget', () => {
+  const syntax = catalog.forVersion(undefined);
+
+  it('handles a keystroke in a 2,000-line file well inside the 100 ms budget', () => {
     const text = bigScript(2000);
     expect(text.split('\n').length).toBeGreaterThanOrEqual(2000);
+    const index = new WorkspaceIndex(syntax.version);
 
-    // Warm up the JIT, then time what one keystroke costs: a full reparse of the file.
-    for (let i = 0; i < 5; i++) toDiagnostics(parseScript(text), defaultSettings);
+    // What the server does per keystroke: re-parse and re-index the file, then publish its diagnostics.
+    for (let i = 0; i < 5; i++) toDiagnostics(index.update('file:///big.sk', text).script.issues, defaultSettings);
     const times: number[] = [];
     for (let i = 0; i < 30; i++) {
-      const edited = text + `\n# edit ${i}`;
+      const edited = `${text}\n# edit ${i}`;
       const start = performance.now();
-      toDiagnostics(parseScript(edited), defaultSettings);
+      toDiagnostics(index.update('file:///big.sk', edited).script.issues, defaultSettings);
       times.push(performance.now() - start);
     }
-    times.sort((a, b) => a - b);
-    const p95 = times[Math.floor(times.length * 0.95)];
-    console.log(`2,000-line file: median ${times[15].toFixed(2)} ms, p95 ${p95.toFixed(2)} ms`);
+    const p95 = percentile(times, 0.95);
+    console.log(`2,000-line keystroke: median ${percentile(times, 0.5).toFixed(2)} ms, p95 ${p95.toFixed(2)} ms`);
     expect(p95).toBeLessThan(100);
+  });
+
+  it('re-checks a 100,000-line project in the background quickly', () => {
+    const index = new WorkspaceIndex(syntax.version);
+    for (let f = 0; f < 50; f++) index.update(`file:///s${f}.sk`, bigScript(2000, `f${f}_`));
+    const times: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const start = performance.now();
+      projectIssues({ index, catalog, syntax, version: syntax.version, settings: defaultSettings });
+      times.push(performance.now() - start);
+    }
+    const median = percentile(times, 0.5);
+    console.log(`project pass over 50 files / 100k lines: median ${median.toFixed(1)} ms`);
+    expect(median).toBeLessThan(1000);
   });
 });
